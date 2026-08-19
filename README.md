@@ -94,8 +94,11 @@ For example, using Python's built-in `venv`:
 ```shell script
 python3.12 -m venv .venv
 source .venv/bin/activate
-pip install \
-  "roboticstoolbox-python[swift,qp,collision] @ git+https://github.com/jbkahrs/robotics-toolbox-python.git"
+git clone https://github.com/jbkahrs/robotics-toolbox-python-csc376.git
+
+cd robotics-toolbox-python-csc376
+
+pip install -e ".[swift,qp,collision]"
 
 pip install \
   --prefer-binary \
