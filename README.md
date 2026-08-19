@@ -1,5 +1,9 @@
 # Robotics Toolbox for Python
 
+## Course Fork
+
+This repository is a course-specific fork of Peter Corke’s Robotics Toolbox for Python. It is maintained solely for use in CSC376 at the University of Toronto. It includes modifications to simplify installation, ensure compatibility with the course software stack, and support course examples. For the official project, see the upstream repository: https://github.com/petercorke/robotics-toolbox-python
+
 <div align="center">
   <img src="https://raw.githubusercontent.com/petercorke/robotics-toolbox-python/main/docs/figs/RobToolBox_RoundLogoB.png" width="390">
   <br>
@@ -8,46 +12,25 @@
   <strong>A high-productivity framework for robotics research and education.</strong>
   <br><br>
 
-[![JupyterLite](https://img.shields.io/badge/Try_it_Now-JupyterLite-orange?style=for-the-badge&logo=jupyter)](https://petercorke.github.io/robotics-toolbox-python/lite/lab?path=robotics.ipynb)
-  [![PyPI version](https://img.shields.io/pypi/v/roboticstoolbox-python?style=for-the-badge&color=blue)](https://pypi.org/project/roboticstoolbox-python/)
   [![Documentation](https://img.shields.io/badge/Docs-View_Online-blue?style=for-the-badge)](https://petercorke.github.io/robotics-toolbox-python)
 
   <p>
-    <a href="https://github.com/petercorke/robotics-toolbox-python">GitHub</a> •
-    <a href="https://github.com/petercorke/robotics-toolbox-python/wiki">Wiki</a> •
-    <a href="https://github.com/petercorke/robotics-toolbox-python/blob/main/CHANGELOG.md">Changelog</a> •
+    <a href="https://github.com/jbkahrs/robotics-toolbox-python">GitHub</a> •
     <a href="#getting-going">Installation</a>
   </p>
 </div>
 
 ---
 
-### Status & Project Health
-
-[![Build Status](https://github.com/petercorke/robotics-toolbox-python/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/petercorke/robotics-toolbox-python/actions/workflows/ci.yml)
-[![Downloads](https://static.pepy.tech/badge/roboticstoolbox-python/month)](https://pepy.tech/projects/roboticstoolbox-python)
-![PyPI - Python Version](https://img.shields.io/pypi/pyversions/roboticstoolbox-python.svg)
-[![codecov](https://codecov.io/gh/petercorke/robotics-toolbox-python/graph/badge.svg?token=0rqN39PDEO)](https://codecov.io/gh/petercorke/robotics-toolbox-python)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
 ### Ecosystem & Dependencies
-
-[![A Python Robotics Package](https://raw.githubusercontent.com/petercorke/robotics-toolbox-python/main/.github/svg/py_collection.min.svg)](https://github.com/petercorke/robotics-toolbox-python)
-[![QUT Centre for Robotics Open Source](https://github.com/qcr/qcr.github.io/raw/master/misc/badge.svg)](https://qcr.github.io)
 
 [![powered by NumPy](https://img.shields.io/badge/powered_by-NumPy-013243?logo=numpy&logoColor=white)](https://numpy.org)
 [![powered by SciPy](https://img.shields.io/badge/powered_by-SciPy-0054a6?logo=scipy&logoColor=white)](https://scipy.org)
 [![powered by Matplotlib](https://img.shields.io/badge/powered_by-Matplotlib-11557c?logo=matplotlib&logoColor=white)](https://matplotlib.org)
 [![Powered by Spatial Maths](https://raw.githubusercontent.com/petercorke/spatialmath-python/master/.github/svg/sm_powered.min.svg)](https://github.com/petercorke/spatialmath-python)
 
-<!-- <br> -->
 
 ## Contents
-
-<!-- Kept as a manual list deliberately: this file is also PyPI's project
-     description (see pyproject.toml's `readme`), which has no native
-     table-of-contents widget the way GitHub does. Keep in sync with the
-     headings below when adding/renaming a section. -->
 
 - [Synopsis](#synopsis)
 - [Getting going](#getting-going)
@@ -94,117 +77,31 @@ The Toolbox provides:
 - source code which can be read for learning and teaching;
 - backward compatability with the Robotics Toolbox for MATLAB
 
-The Toolbox leverages the [Spatial Maths Toolbox for Python](https://github.com/petercorke/spatialmath-python) to
-provide support for data types such as SO(n) and SE(n) matrices, quaternions, twists and spatial vectors.
+The Toolbox leverages the [Spatial Maths Toolbox for Python](https://github.com/petercorke/spatialmath-python) to provide support for data types such as SO(n) and SE(n) matrices, quaternions, twists and spatial vectors.
 
 <br>
 
 ## Getting going
 
-You will need Python >= 3.10
+You will need Python 3.12.
 
-### Using pip
+You may use any Python environment manager you prefer, such as `venv`,
+`virtualenv`, `conda`, `pyenv`, Poetry, or an environment managed by your IDE.
+Create or select an environment with Python 3.12 and activate it before running
+the installation commands below.
 
-Install a snapshot from PyPI
-
+For example, using Python's built-in `venv`:
 ```shell script
-pip install roboticstoolbox-python
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install \
+  "roboticstoolbox-python[swift,qp,collision] @ git+https://github.com/jbkahrs/robotics-toolbox-python.git"
+
+pip install \
+  --prefer-binary \
+  --no-deps \
+  -r requirements.txt
 ```
-
-Available options are:
-
-- `swift` install [Swift](https://github.com/jhavl/swift), a web-based visualizer
-- `qp` install quadratic-programming IK dependencies (`qpsolvers`, `quadprog`)
-- `collision` install collision checking with [coal](https://github.com/coal-library/coal) and `trimesh`
-- `tool` install `IPython` and `pygments`, needed to run the `rtbtool` interactive shell
-- `all` install `swift`, `qp`, `collision`, and `tool`
-
-> **Windows note:** `coal` does not publish Windows wheels on PyPI, so the
-> `collision`/`all` extras skip it there and collision checking is
-> unavailable via `pip` on Windows. It's available via
-> `conda install -c conda-forge coal-python` if needed. Everything else in
-> the Toolbox works normally.
-
-Put the options in a comma separated list like
-
-```shell script
-pip install roboticstoolbox-python[optionlist]
-```
-
-If you want the Swift visualizer, install the `swift` extra.
-
-Install matrix:
-
-- Core only
-
-```shell script
-pip install roboticstoolbox-python
-```
-
-- Swift visualizer only
-
-```shell script
-pip install roboticstoolbox-python[swift]
-```
-
-- QP solver dependencies only
-
-```shell script
-pip install roboticstoolbox-python[qp]
-```
-
-- Collision checking dependencies only
-
-```shell script
-pip install roboticstoolbox-python[collision]
-```
-
-- `rtbtool` interactive shell dependencies only
-
-```shell script
-pip install roboticstoolbox-python[tool]
-```
-
-- Everything (swift + qp + collision + tool)
-
-```shell script
-pip install roboticstoolbox-python[all]
-```
-
-- Multiple extras explicitly
-
-```shell script
-pip install roboticstoolbox-python[swift,qp,collision]
-```
-
-### From GitHub
-
-To install the bleeding-edge version from GitHub
-
-```shell script
-git clone https://github.com/petercorke/robotics-toolbox-python.git
-cd robotics-toolbox-python
-pip install -e .
-```
-
-To generate a Wasm wheel that will run in the browser see the [instructions here](#build-a-jupyterlitepyodide-wasm-wheel).
-
-
-## Tutorials
-
-<table style="border:0px">
-<tr style="border:0px">
-<td style="border:0px"><a href="https://bit.ly/3ak5GDi"><img src="https://github.com/jhavl/dkt/raw/main/img/article1.png" width="400"></a></td>
-<td style="border:0px"><a href="https://bit.ly/3ak5GDi"><img src="https://github.com/jhavl/dkt/raw/main/img/article2.png" width="400"></a></td>
-<td style="border:0px">
-Do you want to learn about manipulator kinematics, differential kinematics, inverse-kinematics and motion control? Have a look at our
-<a href="https://bit.ly/3ak5GDi">tutorial</a>.
-This tutorial comes with two articles to cover the theory and 12 Jupyter Notebooks providing full code implementations and examples. Most of the Notebooks are also Google Colab compatible allowing them to run online.
-</td>
-</tr>
-</table>
-
-<br>
 
 ## Code Examples
 
