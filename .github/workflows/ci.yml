@@ -1,5 +1,5 @@
 # Run tests, coverage, and build docs across all supported platforms
-# Triggers on pushes/PRs to main and the active dev branch.
+# Triggers on pushes/PRs to main.
 #
 # spatialgeometry and swift-sim are installed from GitHub HEAD because the
 # current PyPI releases were compiled against NumPy 1.x and crash under 2.x.
@@ -10,9 +10,9 @@ name: CI
 
 on:
   push:
-    branches: [main, future]
+    branches: [main]
   pull_request:
-    branches: [main, future]
+    branches: [main]
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -57,10 +57,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
-        exclude:
-          - os: windows-latest
-            python-version: "3.13"
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v7
 
@@ -79,8 +76,8 @@ jobs:
       - name: Install spatialgeometry + swift from source (NumPy 2 compatible)
         run: |
             pip install "websockets<11"
-            pip install git+https://github.com/petercorke/spatialgeometry.git@future
-            pip install git+https://github.com/petercorke/swift.git@future
+            pip install git+https://github.com/jhavl/spatialgeometry.git@future
+            pip install git+https://github.com/jhavl/swift.git@future
 
       - name: Install package
         run: pip install .[dev]
@@ -99,6 +96,19 @@ jobs:
       - name: Test
         run: pytest tests/ --ignore=tests/test_blocks.py --timeout=50 --timeout_method=thread -q
 
+  all-tests-passed:
+    name: All tests passed
+    needs: [test-core, test]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check test job results
+        run: |
+          if [ "${{ needs.test-core.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ]; then
+            echo "test-core: ${{ needs.test-core.result }}, test: ${{ needs.test.result }}"
+            exit 1
+          fi
+
   coverage:
     needs: [test-core, test]
     runs-on: ubuntu-latest
@@ -113,8 +123,8 @@ jobs:
       - name: Install spatialgeometry + swift from source (NumPy 2 compatible)
         run: |
           pip install "websockets<11"
-          pip install git+https://github.com/petercorke/spatialgeometry.git@future
-          pip install git+https://github.com/petercorke/swift.git@future
+          pip install git+https://github.com/jhavl/spatialgeometry.git@future
+          pip install git+https://github.com/jhavl/swift.git@future
 
       - name: Install package
         run: pip install .[dev]
@@ -140,13 +150,13 @@ jobs:
       - name: Install spatialgeometry + swift from source (NumPy 2 compatible)
         run: |
           pip install "websockets<11"
-          pip install git+https://github.com/petercorke/spatialgeometry.git@future
-          pip install git+https://github.com/petercorke/swift.git@future
+          pip install git+https://github.com/jhavl/spatialgeometry.git@future
+          pip install git+https://github.com/jhavl/swift.git@future
 
       - name: Install docs dependencies
         run: |
           pip install .[docs]
-          pip install git+https://github.com/petercorke/sphinx-autorun.git sympy
+          pip install sympy
           sudo apt-get install -y graphviz
 
       - name: Build docs

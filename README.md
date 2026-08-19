@@ -22,19 +22,22 @@
 
 ---
 
-### Status & Ecosystem
+### Status & Project Health
+
+[![Build Status](https://github.com/petercorke/robotics-toolbox-python/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/petercorke/robotics-toolbox-python/actions/workflows/ci.yml)
+[![Downloads](https://static.pepy.tech/badge/roboticstoolbox-python/month)](https://pepy.tech/projects/roboticstoolbox-python)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/roboticstoolbox-python.svg)
+[![codecov](https://codecov.io/gh/petercorke/robotics-toolbox-python/graph/badge.svg?token=0rqN39PDEO)](https://codecov.io/gh/petercorke/robotics-toolbox-python)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+### Ecosystem & Dependencies
 
 [![A Python Robotics Package](https://raw.githubusercontent.com/petercorke/robotics-toolbox-python/main/.github/svg/py_collection.min.svg)](https://github.com/petercorke/robotics-toolbox-python)
 [![QUT Centre for Robotics Open Source](https://github.com/qcr/qcr.github.io/raw/master/misc/badge.svg)](https://qcr.github.io)
-[![Build Status](https://github.com/petercorke/robotics-toolbox-python/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/petercorke/robotics-toolbox-python/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/petercorke/robotics-toolbox-python/graph/badge.svg?token=0rqN39PDEO)](https://codecov.io/gh/petercorke/robotics-toolbox-python)
-![PyPI - Python Version](https://img.shields.io/pypi/pyversions/roboticstoolbox-python.svg)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![PyPI - Downloads](https://img.shields.io/pypi/dw/roboticstoolbox-python)](https://pypistats.org/packages/roboticstoolbox-python)
-[![Anaconda version](https://anaconda.org/conda-forge/roboticstoolbox-python/badges/version.svg)](https://anaconda.org/conda-forge/roboticstoolbox-python)
 
-### Powered by
-
+[![powered by NumPy](https://img.shields.io/badge/powered_by-NumPy-013243?logo=numpy&logoColor=white)](https://numpy.org)
+[![powered by SciPy](https://img.shields.io/badge/powered_by-SciPy-0054a6?logo=scipy&logoColor=white)](https://scipy.org)
+[![powered by Matplotlib](https://img.shields.io/badge/powered_by-Matplotlib-11557c?logo=matplotlib&logoColor=white)](https://matplotlib.org)
 [![Powered by Spatial Maths](https://raw.githubusercontent.com/petercorke/spatialmath-python/master/.github/svg/sm_powered.min.svg)](https://github.com/petercorke/spatialmath-python)
 
 <!-- <br> -->
@@ -330,6 +333,26 @@ while not arrived:
 	<img src="./docs/figs/panda3.gif">
 </p>
 
+### Loading models from robot_descriptions
+
+The Panda example above uses one of the ~50 models shipped with the Toolbox, but many more
+robots are available on demand via the [robot_descriptions](https://github.com/robot-descriptions/robot_descriptions.py)
+package, which is installed automatically as a dependency. Passing a bare name (no file suffix)
+to `URDFRobot` fetches and loads it from there:
+
+```python
+from roboticstoolbox.models.URDF.URDFRobot import URDFRobot
+ur5 = URDFRobot("ur5")
+```
+
+`rtb.models.catalog()` lists everything available — the models built into the Toolbox as well
+as those it can load from `robot_descriptions` — with filtering by keyword/DoF/model type and
+column sorting:
+
+```python
+rtb.models.catalog(mtype="URDF", sorton="name")
+```
+
 ### Run some examples
 
 The [`notebooks`](https://github.com/petercorke/robotics-toolbox-python/tree/main/notebooks) folder contains some tutorial Jupyter notebooks which you can browse on GitHub. Additionally, have a look in the [`examples`](https://github.com/petercorke/robotics-toolbox-python/tree/main/roboticstoolbox/examples) folder for many ready to run examples.
@@ -399,7 +422,7 @@ copy the following
 
 ## Common Issues and Solutions
 
-See the common issues with fixes [here](https://github.com/petercorke/robotics-toolbox-python/wiki/Common-Issues).
+See the common issues with fixes [here](https://github.com/petercorke/robotics-toolbox-python/wiki/FAQ).
 
 ### Using the Toolbox with Windows?
 
@@ -443,7 +466,7 @@ K. He, R. Newbury, T. Tran, J. Haviland, B. Burgess-Limerick, D. Kulić, P. Cork
 
 <p>
   <a href="https://youtu.be/vobLvg4E3kM">
-    <img src="https://raw.githubusercontent.com/petercorke/robotics-toolbox-python/future/docs/figs/vmc_youtube.png" width="560">
+    <img src="https://raw.githubusercontent.com/petercorke/robotics-toolbox-python/main/docs/figs/vmc_youtube.png" width="560">
   </a>
 </p>
 
