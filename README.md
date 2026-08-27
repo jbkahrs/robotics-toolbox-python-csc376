@@ -100,10 +100,6 @@ cd robotics-toolbox-python-csc376
 
 pip install -e ".[swift,qp,collision]"
 
-pip install \
-  --prefer-binary \
-  --no-deps \
-  -r requirements.txt
 ```
 
 ## Code Examples
