@@ -512,7 +512,8 @@ class PyPlot(Connector):
 
         # render the frame and save as a PIL image in the list
         canvas = self.fig.canvas
-        return _pil("RGB", canvas.get_width_height(), canvas.tostring_rgb())
+        image = _pil("RGBA", canvas.get_width_height(), bytes(canvas.buffer_rgba()))
+        return image.convert("RGB")
 
     def _push_inline_frame(self):
         # Push a snapshot into notebook output for inline animation.
@@ -586,7 +587,14 @@ class PyPlot(Connector):
         self.ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
         self.ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
 
-    def _add_teach_panel(self, robot, q):
+    def _add_teach_panel(self, robot, q, handle=None, block=True):
+        # handle, block: unused here -- PyPlot has no AssemblyHandle
+        # concept (it drives the panel by mutating robot.q directly
+        # below), and matplotlib's own GUI mainloop (entered via this
+        # backend's env.hold()) already processes slider events on its
+        # own, unlike Swift's hold() which needs an active step() loop.
+        # Both params only meaningful for the Swift backend's own
+        # _add_teach_panel().
 
         if _isnotebook():
             raise RuntimeError("cannot use teach panel under Jupyter")

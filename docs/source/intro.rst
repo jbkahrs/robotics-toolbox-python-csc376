@@ -103,7 +103,7 @@ All robots can generate a random joint configuration informed by joint limits, i
     >>> puma.random_q()
 
 ``ikine_LM`` is a generalised iterative numerical solution based on
-Levenberg-Marquadt minimization, and additional status results are also
+Levenberg-Marquardt minimization, and additional status results are also
 returned as part of a named tuple.  
 
 .. warning:: 
@@ -634,11 +634,12 @@ the default ``PyPlot`` backend which draws a "noodle robot" using the PyPlot bac
 
 The more general solution, and what is implemented inside ``plot`` in the example above, is::
 
-    >>> pyplot = roboticstoolbox.backends.PyPlot()
+    >>> from roboticstoolbox.backends.PyPlot import PyPlot
+    >>> pyplot = PyPlot()
     >>> pyplot.launch()
     >>> pyplot.add(puma)
     >>> puma.q = q
-    >>> puma.step()
+    >>> pyplot.step()
 
 This makes it possible to animate multiple robots in the one graphical window, or the one robot in various environments either graphical
 or real.
@@ -658,7 +659,7 @@ to import them if the user attempts to exploit a functionality that requires it.
 If a dependency is not installed, a warning provides instructions on how to install it using ``pip``.
 
 C/C++ extensions are provided for recursive Newton-Euler dynamics and optimized forward and inverse kinematics for ETS defined robots.  These
-wheels are built by the GitHub CI actions.  A pyodide wheel is also built for use in the browser and is available as a GitHub release resource.
+wheels are built by the GitHub CI actions.  A pure-Python wheel (using tested pure-Python fallbacks for the C/C++ functionality) is also built for use in the browser via Pyodide/JupyterLite, and is published to PyPI alongside the compiled wheels.
 
 
 Spatial math layer

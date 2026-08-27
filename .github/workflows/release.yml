@@ -1,7 +1,29 @@
-# Build wheels for all platforms and publish to PyPI.
-# Triggered on GitHub release creation or manually via workflow_dispatch.
+# Single workflow: release-please proposes/cuts releases, and the same run
+# builds + publishes wheels once a release is actually created.
 #
-# Uses OIDC trusted publishing — no stored PyPI token required.
+# Previously release-please.yml and this file were separate workflows, with
+# this one triggered on `release: created`. That event never fired in
+# practice: release-please-action creates the GitHub Release using the
+# default GITHUB_TOKEN, and GitHub deliberately does not cascade events
+# triggered by that token to *other* workflows (anti-recursion protection).
+# Confirmed the hard way shipping v1.4.0 (2026-08-23): release-please's PR
+# merged, the tag+release were created, and release.yml simply never ran --
+# required a manual `workflow_dispatch` to publish, which in turn skipped
+# `upload_pyodide_asset` (gated on `github.event_name == 'release'`),
+# leaving the release with no wasm asset until a manual backfill.
+#
+# Fix: merge both into one workflow so the build/publish jobs are downstream
+# jobs of release-please's own job in the *same* run, gated on its
+# `release_created`/`tag_name` outputs -- this sidesteps the cross-workflow
+# trigger restriction entirely, since nothing needs to fire a second time.
+# This is release-please-action's own documented pattern for this problem.
+#
+# `workflow_dispatch` is kept for manual rebuilds (e.g. to regenerate
+# artifacts) -- on that trigger the release-please job is skipped and
+# `verify_version` skips its tag-match check (no fresh tag to check
+# against).
+#
+# Uses OIDC trusted publishing for PyPI -- no stored PyPI token required.
 # macOS uses macos-14 (arm64); cibuildwheel cross-compiles x86_64 as well
 # (see [tool.cibuildwheel.macos] archs in pyproject.toml).
 # Check for latest cibuildwheel: https://github.com/pypa/cibuildwheel/releases
@@ -9,24 +31,52 @@
 name: Release
 
 on:
-  release:
-    types: [created]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
+  release-please:
+    name: Release Please
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v5
+        id: release
+        with:
+          config-file: .github/release-please-config.json
+          manifest-file: .github/.release-please-manifest.json
+
   verify_version:
     name: Verify tag matches package version
+    needs: release-please
+    # Runs on workflow_dispatch (manual rebuild) or on a push that release-please
+    # just turned into a real release. `always()` is required here because the
+    # release-please job is skipped on workflow_dispatch, and a skipped `needs`
+    # job would otherwise auto-skip this one under the default `if: success()`.
+    if: >
+      always() &&
+      (github.event_name == 'workflow_dispatch' ||
+       (needs.release-please.result == 'success' && needs.release-please.outputs.release_created == 'true'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - name: Check version
-        # Skip check on manual workflow_dispatch runs (no release tag exists)
-        if: github.event_name == 'release'
+        # Skip on manual workflow_dispatch runs (no fresh tag to check against)
+        if: needs.release-please.outputs.release_created == 'true'
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          TAG="${{ needs.release-please.outputs.tag_name }}"
+          TAG="${TAG#v}"
           PKG=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
           echo "Tag version : $TAG"
           echo "Package version: $PKG"
@@ -35,6 +85,12 @@ jobs:
   build_wheels:
     name: Build wheels on ${{ matrix.os }} (${{ matrix.arch }})
     needs: verify_version
+    # always() + explicit check, not the default if:success() -- success()
+    # walks the *entire transitive* needs chain, not just direct needs, so
+    # it would see release-please's skip (verify_version's own ancestor)
+    # and auto-skip this job too even though verify_version itself
+    # succeeded. Confirmed empirically via a workflow_dispatch rehearsal.
+    if: always() && needs.verify_version.result == 'success'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -60,27 +116,46 @@ jobs:
           path: ./wheelhouse/*.whl
 
   build_pyodide:
-    name: Build Pyodide (wasm32) wheel
+    name: Build pure-Python wheel (for Pyodide/JupyterLite)
     needs: verify_version
+    # See build_wheels' comment above for why always() + an explicit check
+    # is needed instead of the default if:success().
+    if: always() && needs.verify_version.result == 'success'
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
 
-      - name: Diagnostics
-        run: |
-          python3 --version
-          pip3 --version
-          pip3 show cibuildwheel 2>/dev/null || echo "cibuildwheel not installed locally (normal)"
-          echo "PYODIDE_VERSION=${{ vars.PYODIDE_VERSION || '0.27.5' }}"
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
 
-      - name: Build Pyodide wheel
-        uses: pypa/cibuildwheel@v4.1.1
-        env:
-          CIBW_PLATFORM: pyodide
+      # Not a cross-compile: RTB_PURE_WHEEL=1 (see pyproject.toml's
+      # scikit-build-core override) skips both _fknm_c/_frne_c (they have
+      # complete, tested pure-Python fallbacks -- fknm.py/frne.py,
+      # tests/test_fknm_fallback.py) and forces the wheel tag to
+      # py3-none-any. No Emscripten SDK, no cibuildwheel Pyodide platform,
+      # no Pyodide-version coupling at all -- a plain wheel built on a
+      # normal runner. This replaced an earlier approach that cross-compiled
+      # a real wasm32 binary via cibuildwheel's Pyodide platform, which tied
+      # the wheel to one specific Pyodide/Emscripten ABI version and, worse,
+      # to a JSPI-safe-vs-unsafe split (Safari/Firefox lack WebAssembly JSPI,
+      # which Pyodide >=0.27.7 needs) -- see git history on this job and on
+      # pyproject.toml for that saga. A pure-Python wheel has no ABI to be
+      # wrong about, so none of that applies here.
+      - name: Build pure-Python wheel
+        run: |
+          pip install build
+          RTB_PURE_WHEEL=1 python3 -m build --wheel --outdir wheelhouse
+
+      - name: Verify wheel is genuinely pure Python
+        run: |
+          ls wheelhouse/
+          case "$(ls wheelhouse/)" in
+            *-py3-none-any.whl) echo "OK: py3-none-any" ;;
+            *) echo "ERROR: expected a py3-none-any wheel"; exit 1 ;;
+          esac
 
       - uses: actions/upload-artifact@v7
-        if: success()
         with:
           name: wheels-pyodide
           path: ./wheelhouse/*.whl
@@ -88,6 +163,9 @@ jobs:
   build_sdist:
     name: Build source distribution
     needs: verify_version
+    # See build_wheels' comment above for why always() + an explicit check
+    # is needed instead of the default if:success().
+    if: always() && needs.verify_version.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -103,6 +181,9 @@ jobs:
   smoke_test:
     name: Smoke-test Linux wheel
     needs: build_wheels
+    # See build_wheels' comment above for why always() + an explicit check
+    # is needed instead of the default if:success().
+    if: always() && needs.build_wheels.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-python@v7
@@ -123,6 +204,14 @@ jobs:
 
   upload_pypi:
     needs: [build_wheels, build_pyodide, build_sdist, smoke_test]
+    # See build_wheels' comment above for why always() + an explicit check
+    # is needed instead of the default if:success().
+    if: >
+      always() &&
+      needs.build_wheels.result == 'success' &&
+      needs.build_pyodide.result == 'success' &&
+      needs.build_sdist.result == 'success' &&
+      needs.smoke_test.result == 'success'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -139,30 +228,9 @@ jobs:
           name: sdist
           path: dist
 
-      # Exclude Pyodide wheels — PyPI rejects the pyodide_* platform tag.
-      # They are uploaded as release assets in the next step instead.
-      - name: Remove Pyodide wheels from PyPI upload set
-        run: rm -f dist/*pyodide*.whl
-
+      # The pyodide wheel (py3-none-any) uploads to PyPI like any other
+      # wheel now -- no tag rejection, no GitHub-Release-asset workaround.
+      # See build_pyodide's comment for why.
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          skip_existing: true
-
-  upload_pyodide_asset:
-    name: Attach Pyodide wheel to GitHub release
-    needs: build_pyodide
-    if: github.event_name == 'release' && needs.build_pyodide.result == 'success'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: wheels-pyodide
-          path: pyodide-dist
-
-      - name: Upload Pyodide wheel as release asset
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: pyodide-dist/*.whl
+          skip-existing: true

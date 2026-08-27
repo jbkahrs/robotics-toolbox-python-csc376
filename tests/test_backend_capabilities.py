@@ -53,7 +53,7 @@ class TestPyPlotCapabilities(unittest.TestCase):
 
 
 class TestSwiftCapabilities(unittest.TestCase):
-    """RTB Swift wrapper opts out of teach and ellipse."""
+    """RTB Swift wrapper supports teach but opts out of ellipse (for now)."""
 
     def setUp(self):
         # Skip if swift-sim is not installed
@@ -62,18 +62,18 @@ class TestSwiftCapabilities(unittest.TestCase):
         except (ImportError, ModuleNotFoundError):
             self.skipTest("swift-sim not installed")
 
-    def test_swift_class_supports_teach_false(self):
+    def test_swift_class_supports_teach_true(self):
         from roboticstoolbox.backends.swift import Swift
-        self.assertFalse(Swift.supports_teach)
+        self.assertTrue(Swift.supports_teach)
 
     def test_swift_class_supports_ellipse_false(self):
         from roboticstoolbox.backends.swift import Swift
         self.assertFalse(Swift.supports_ellipse)
 
-    def test_load_backend_swift_supports_teach_false(self):
+    def test_load_backend_swift_supports_teach_true(self):
         from roboticstoolbox.backends import load_backend
         env = load_backend("swift")
-        self.assertFalse(env.supports_teach)
+        self.assertTrue(env.supports_teach)
 
     def test_load_backend_swift_supports_ellipse_false(self):
         from roboticstoolbox.backends import load_backend
@@ -111,6 +111,20 @@ class TestMPLMixinOnRobot(unittest.TestCase):
     def test_robot_has_linkcolormap(self):
         robot = self._make_robot()
         self.assertTrue(hasattr(robot, "linkcolormap"))
+
+    def test_linkcolormap_from_name(self):
+        # Regression test: linkcolormap() used matplotlib.cm.get_cmap(),
+        # removed in matplotlib 3.9, so any named colormap raised
+        # AttributeError instead of returning a 6-entry colormap.
+        robot = self._make_robot()
+        cmap = robot.linkcolormap("inferno")
+        self.assertEqual(cmap.N, 6)
+
+    def test_linkcolormap_from_list(self):
+        robot = self._make_robot()
+        colors = ["red", "g", (0, 0.5, 0), "#0f8040", "yellow", "cyan"]
+        cmap = robot.linkcolormap(colors)
+        self.assertEqual(cmap.N, len(colors))
 
     def test_mixin_present_in_mro(self):
         import roboticstoolbox as rtb

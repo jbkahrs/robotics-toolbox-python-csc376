@@ -547,7 +547,16 @@ class TestETS(unittest.TestCase):
         self.assertTrue(len(r) > len(r2))
 
     def test_insert(self):
-        q = [1.0, 2, 3, 4, 5, 6]
+        # 7 joints (l0..l6, jindex 0-6) need 7 values -- q previously had
+        # only 6, an off-by-one that silently "worked" only because the C
+        # extension has no bounds checking (q[6] read past the end of the
+        # array, undefined behaviour that happened not to crash). Confirmed
+        # by comparing r.eval() with 6 vs 7 elements: they give genuinely
+        # different results, proving index 6 really is read and used, not
+        # just harmlessly ignored. Found via the pure-Python fallback
+        # (_python_fkine), which correctly raises IndexError instead of
+        # silently reading garbage.
+        q = [1.0, 2, 3, 4, 5, 6, 7]
         deg = np.pi / 180
         mm = 1e-3
         tool_offset = (103) * mm
@@ -4463,6 +4472,41 @@ class TestETS(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             ets.manipulability(q, axes="abcdef")  # type: ignore
+
+    def test_resolve_q_compact_and_global(self):
+        # a sub-chain whose own jindex range doesn't start at 0 -- e.g. a
+        # second arm on a branched robot, jindex 3-5 while some other
+        # branch owns 0-2
+        e = Rz(jindex=3) * tx(1) * Rz(jindex=4) * tx(1) * Rz(jindex=5)
+        ets = rtb.ETS(e)
+
+        self.assertEqual(ets.n, 3)
+        nt.assert_array_equal(ets.jindices, [3, 4, 5])
+
+        q_compact = [0.1, 0.2, 0.3]
+        q_global = np.zeros(6)
+        q_global[3:6] = q_compact
+
+        nt.assert_almost_equal(ets.eval(q_compact), ets.eval(q_global))
+        nt.assert_almost_equal(ets.jacob0(q_compact), ets.jacob0(q_global))
+        nt.assert_almost_equal(ets.jacobe(q_compact), ets.jacobe(q_global))
+        nt.assert_almost_equal(ets.hessian0(q_compact), ets.hessian0(q_global))
+        nt.assert_almost_equal(ets.hessiane(q_compact), ets.hessiane(q_global))
+
+    def test_resolve_q_too_short_raises(self):
+        e = Rz(jindex=3) * tx(1) * Rz(jindex=4) * tx(1) * Rz(jindex=5)
+        ets = rtb.ETS(e)
+
+        # neither compact (3) nor global (>= 6)
+        with self.assertRaises(ValueError):
+            ets.eval([0.1, 0.2, 0.3, 0.4])
+
+    def test_resolve_q_trajectory_still_works(self):
+        panda = rtb.models.Panda().ets()
+        qt = np.tile(panda.random_q(), (5, 1))
+
+        T = panda.eval(qt)
+        self.assertEqual(T.shape, (5, 4, 4))
 
 
 if __name__ == "__main__":

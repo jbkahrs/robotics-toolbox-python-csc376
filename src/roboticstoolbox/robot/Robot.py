@@ -49,6 +49,13 @@ from roboticstoolbox.tools.data import rtb_path_to_datafile
 # A generic type variable representing any subclass of BaseLink
 LinkType = TypeVar("LinkType", bound=BaseLink)
 
+# Shared default objects for Robot.__init__'s gravity/keywords parameters,
+# identity-compared in the clone-from-Robot branch to detect "caller didn't
+# override this" (a plain equality/falsy check can't tell a genuine [0, 0,
+# -9.81] override apart from the unset default).
+_GRAVITY_DEFAULT: list[float] = [0, 0, -9.81]
+_KEYWORDS_DEFAULT: list[str] = []
+
 
 # ==================================================================================== #
 # ================= Robot Class ====================================================== #
@@ -67,8 +74,8 @@ class Robot(BaseRobot[Link], RobotKinematicsMixin):
         comment: str = "",
         base: NDArray | SE3 | None = None,
         tool: NDArray | SE3 | None = None,
-        gravity: ArrayLike = [0, 0, -9.81],
-        keywords: list[str] | tuple[str, ...] = [],
+        gravity: ArrayLike = _GRAVITY_DEFAULT,
+        keywords: list[str] | tuple[str, ...] = _KEYWORDS_DEFAULT,
         symbolic: bool = False,
         configs: dict[str, NDArray] | None = None,
         check_jindex: bool = True,
@@ -98,7 +105,24 @@ class Robot(BaseRobot[Link], RobotKinematicsMixin):
                     link._parent_name = link.parent.name
                     link._parent = None
 
-            super().__init__(links, gripper_links=gripper_links)
+            # Clone the source robot's own attributes for anything the
+            # caller didn't explicitly override (name="" / base=None /
+            # etc. are the "not given" markers matching this signature's
+            # own defaults above).
+            super().__init__(
+                links,
+                gripper_links=gripper_links,
+                name=name or arg.name,
+                manufacturer=manufacturer or arg.manufacturer,
+                comment=comment or arg.comment,
+                base=base if base is not None else arg.base,
+                tool=tool if tool is not None else arg.tool,
+                gravity=gravity if gravity is not _GRAVITY_DEFAULT else arg.gravity,
+                keywords=keywords if keywords is not _KEYWORDS_DEFAULT else arg.keywords,
+                symbolic=symbolic,
+                configs=configs if configs is not None else arg.configs,
+                check_jindex=check_jindex,
+            )
 
             for i, gripper in enumerate(self.grippers):
                 gripper.tool = arg.grippers[i].tool.copy()
@@ -160,11 +184,11 @@ class Robot(BaseRobot[Link], RobotKinematicsMixin):
         for link in self.links:
             if robot_alpha > 0:
                 for gi in link.geometry:
-                    gi.set_alpha(robot_alpha)
+                    gi.opacity = robot_alpha
                     ob.append(gi.to_dict())
             if collision_alpha > 0:
                 for gi in link.collision:
-                    gi.set_alpha(collision_alpha)
+                    gi.opacity = collision_alpha
                     ob.append(gi.to_dict())
 
         # Do the grippers now
@@ -172,11 +196,11 @@ class Robot(BaseRobot[Link], RobotKinematicsMixin):
             for link in gripper.links:
                 if robot_alpha > 0:
                     for gi in link.geometry:
-                        gi.set_alpha(robot_alpha)
+                        gi.opacity = robot_alpha
                         ob.append(gi.to_dict())
                 if collision_alpha > 0:
                     for gi in link.collision:
-                        gi.set_alpha(collision_alpha)
+                        gi.opacity = collision_alpha
                         ob.append(gi.to_dict())
 
         # for o in ob:
@@ -681,11 +705,29 @@ class Robot(BaseRobot[Link], RobotKinematicsMixin):
         linkframes = Tbase.__class__.Alloc(self.nlinks + 1)
         linkframes[0] = Tbase
 
+        # A link's jindex may be scoped to a gripper's own separate .q state
+        # (grippers keep independent joint state -- see fkine_geometry()'s
+        # docstring) rather than this method's q parameter -- e.g. Panda's
+        # two finger joints both have jindex 0/1, coincidentally valid
+        # indices into the 7-element arm q too, but the wrong array
+        # entirely. fkine_all()'s own contract is "pose of every link
+        # frame" (see docstring) -- fulfilling that for real means sourcing
+        # each gripper joint's value from its owning gripper automatically,
+        # not leaving those slots uncomputed and pushing gripper-awareness
+        # onto every caller (plotting, geometry, ...) instead.
+        gripper_q_source = {
+            link: gripper.q
+            for gripper in self.grippers
+            for link in gripper.links
+            if link.isjoint
+        }
+
         def recurse(Tall, Tparent, q, link):
             # if joint??
             T = Tparent
             while True:
-                T *= SE3(link.A(q[link.jindex]))
+                qsrc = gripper_q_source.get(link, q)
+                T *= SE3(link.A(qsrc[link.jindex]))
 
                 Tall[link.number] = T
 
@@ -693,10 +735,17 @@ class Robot(BaseRobot[Link], RobotKinematicsMixin):
                     # no children
                     return
                 elif link.nchildren == 1:
-                    # one child
-                    if link in self.ee_links:  # pragma nocover
-                        # this link is an end-effector, go no further
-                        return
+                    # one child -- keep going regardless of whether this
+                    # link is registered in self.ee_links. A link can be the
+                    # *nominal* kinematic end-effector for fkine()'s default
+                    # target and still have real children beyond it (e.g. a
+                    # gripper's mounting link past the arm's nominal wrist/
+                    # flange link) -- stopping here left those children's
+                    # slots at the Alloc() default (identity), silently
+                    # wrong rather than computed. Confirmed via a real
+                    # Panda: panda_link8 is in ee_links, has child
+                    # panda_hand, which fkine_all() used to leave at the
+                    # origin regardless of the robot's actual pose.
                     link = link.children[0]
                     continue
                 else:
@@ -749,33 +798,8 @@ class Robot(BaseRobot[Link], RobotKinematicsMixin):
                     poses.append(linkframes[link.number] * SE3(gi._T, check=False))
 
         for gripper in self.grippers:
-            attach_link = next(
-                l for l in self.links if l.name == gripper.links[0].parent_name
-            )
-            base_T = linkframes[attach_link.number]
-
-            gripper_frames: dict[str, SE3] = {}
-
-            def recurse(Tparent, link):
-                T = Tparent
-                while True:
-                    T = T * SE3(link.A(gripper.q[link.jindex]), check=False)
-                    gripper_frames[link.name] = T
-
-                    if link.nchildren == 0:
-                        return
-                    elif link.nchildren == 1:
-                        link = link.children[0]
-                        continue
-                    else:
-                        for child in link.children:
-                            recurse(T, child)
-                        return
-
-            recurse(base_T, gripper.links[0])
-
             for link in gripper.links:
-                T_link = gripper_frames[link.name]
+                T_link = linkframes[link.number]
                 if robot_alpha > 0:
                     for gi in link.geometry:
                         poses.append(T_link * SE3(gi._T, check=False))
@@ -2116,10 +2140,11 @@ class Robot2(BaseRobot[Link2]):
                     # no children
                     return
                 elif link.nchildren == 1:
-                    # one child
-                    if link in self.ee_links:  # pragma nocover
-                        # this link is an end-effector, go no further
-                        return
+                    # one child -- see the SE3 fkine_all's identical comment
+                    # above (Robot.fkine_all): don't stop at ee_links, a
+                    # nominal end-effector can still have real children
+                    # (e.g. a mounted gripper) that fkine_all() must also
+                    # compute.
                     link = link.children[0]
                     continue
                 else:

@@ -168,6 +168,32 @@ class TestDHRobot(unittest.TestCase):
         nt.assert_array_almost_equal(r0.qlim, ans)
         nt.assert_array_almost_equal(r1.qlim, np.c_[qlim])
 
+    def test_A_flip_standard_dh(self):
+        # Issue #563: DHLink.A() honoured flip only when the joint ET
+        # happened to be the last ET in the sequence, which broke for any
+        # standard-DH link with a nonzero d/a/alpha. Covers both revolute
+        # and prismatic, complementing test_flip_with_nonzero_a's ETS
+        # ground-truth cross-check below with a self-consistency check
+        # (flipping the joint should equal negating q on the unflipped
+        # version). Ported from PR #618 (tahazarif10).
+        q = 0.3
+
+        flipped = rp.RevoluteDH(d=0.2, a=0.3, alpha=0.4, offset=0.1, flip=True)
+        normal = rp.RevoluteDH(d=0.2, a=0.3, alpha=0.4, offset=0.1)
+
+        nt.assert_array_almost_equal(
+            flipped.A(q).A,
+            normal.A(-q).A,
+        )
+
+        flipped = rp.PrismaticDH(theta=0.2, a=0.3, alpha=0.4, offset=0.1, flip=True)
+        normal = rp.PrismaticDH(theta=0.2, a=0.3, alpha=0.4, offset=0.1)
+
+        nt.assert_array_almost_equal(
+            flipped.A(q).A,
+            normal.A(-q).A,
+        )
+
     def test_fkine(self):
         l0 = rp.PrismaticDH()
         l1 = rp.RevoluteDH()
@@ -1003,14 +1029,18 @@ class TestDHRobot(unittest.TestCase):
         self.assertTrue(sol.success)
         self.assertAlmostEqual(np.linalg.norm(T - puma.fkine(sol.q)), 0, places=4)
 
-    # def test_ikine_LMS(self):
-    #     puma = rp.models.DH.Puma560()
+    def test_ikine_LM_ikargs_forwarding(self):
+        # DHRobot.ikine_LM forwards **ikargs straight through to
+        # ETS.ikine_LM -- confirm a non-default method/k actually reaches
+        # the underlying solver (regression: DHRobot.ikine_LM used to have
+        # its own narrow signature that silently dropped method/k/kq/km).
+        puma = rp.models.DH.Puma560()
 
-    #     T = puma.fkine(puma.qn)
+        T = puma.fkine(puma.qn)
 
-    #     sol = puma.ikine_LM(T)
-    #     self.assertTrue(sol.success)
-    #     self.assertAlmostEqual(np.linalg.norm(T - puma.fkine(sol.q)), 0, places=6)
+        sol = puma.ikine_LM(T, method="sugihara", k=0.0001, tol=1e-10, seed=0)
+        self.assertTrue(sol.success)
+        self.assertAlmostEqual(np.linalg.norm(T - puma.fkine(sol.q)), 0, places=4)
 
     # def test_ikine_unc(self):
     #     puma = rp.models.DH.Puma560()
@@ -1137,6 +1167,35 @@ class TestDHRobot(unittest.TestCase):
         nt.assert_array_almost_equal(qdd0, res, decimal=4)
         nt.assert_array_almost_equal(qdd1[0, :], res, decimal=4)
         nt.assert_array_almost_equal(qdd1[1, :], res, decimal=4)
+
+    def test_accel_x(self):
+        puma = rp.models.DH.Puma560()
+        q = np.array([0.2, -0.7, 0.4, 0.3, 0.5, -0.2])
+        xd = np.array([0.1, -0.2, 0.15, 0.05, -0.1, 0.2])
+        wrench = np.array([1.0, -0.5, 0.25, 0.1, -0.2, 0.3])
+
+        xdd = puma.accel_x(q, xd, wrench)
+        xdd_traj = puma.accel_x(
+            np.vstack((q, q)),
+            np.vstack((xd, xd)),
+            np.vstack((wrench, wrench)),
+        )
+
+        nt.assert_allclose(
+            xdd,
+            [-1.645157, 4.489468, -4.854711, 3.818259, 6.472284, -2.428306],
+            rtol=1e-5,
+            atol=1e-6,
+        )
+        nt.assert_allclose(xdd_traj, np.vstack((xdd, xdd)))
+
+    def test_accel_x_redundant_robot_returns_cartesian_acceleration(self):
+        panda = rp.models.DH.Panda()
+
+        xdd = panda.accel_x(panda.qr, np.zeros(6), np.zeros(6))
+
+        self.assertEqual(xdd.shape, (6,))
+        self.assertTrue(np.isfinite(xdd).all())
 
     def test_inertia(self):
         puma = rp.models.DH.Puma560()
@@ -1563,6 +1622,17 @@ class TestDHRobot(unittest.TestCase):
         r0 = rp.models.DH.Puma560()
 
         nt.assert_array_almost_equal(r0.alpha, np.r_[1, 0, -1, 1, -1, 0] * math.pi / 2)
+
+    def test_flip_with_nonzero_a(self):
+        # Issue #563: DHLink.A() honoured flip only when the joint ET happened
+        # to be the last ET. For a link with a nonzero a/d/alpha the joint ET is
+        # not last, so flip=True was silently ignored and q was not negated.
+        q = 0.5
+        L = rp.RevoluteDH(a=1.0, flip=True)
+        # A(q) must agree with the link's own ETS evaluation, which honours flip.
+        nt.assert_array_almost_equal(L.A(q).A, L.ets.eval([q]))
+        # The rotation uses the negated angle, so the [1, 0] entry is sin(-q).
+        nt.assert_almost_equal(L.A(q).A[1, 0], math.sin(-q))
 
     def test_ets(self):
         panda = rp.models.DH.Panda()

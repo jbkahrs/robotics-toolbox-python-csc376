@@ -6,6 +6,7 @@ from roboticstoolbox.robot.RobotProto import KinematicsProtocol
 from roboticstoolbox.tools.types import ArrayLike, NDArray
 from roboticstoolbox.robot.Link import Link
 from roboticstoolbox.robot.Gripper import Gripper
+from roboticstoolbox.robot.IK import IKSolution
 from spatialmath import SE3
 from typing import Literal as L, overload
 
@@ -35,10 +36,18 @@ class RobotKinematicsMixin:
         """
         Forward kinematics
 
-        :param q: Joint coordinates
+        :param q: Joint coordinates -- either *global* (length ``robot.n``,
+            addressed by each joint's ``jindex``, e.g. the whole robot's
+            current ``q``) or, when ``end``/``start`` select just one branch
+            of a branched robot, *compact* (length equal to the number of
+            joints on that branch, positionally ordered from ``start`` to
+            ``end`` -- exactly what ``ikine_LM``/``ik_LM`` etc. return when
+            solving for that same ``end``)
         :param end: end-effector or gripper to compute forward kinematics to
         :param start: the link to compute forward kinematics from
         :param tool: tool transform, optional
+        :raises ValueError: if ``q``'s length matches neither the compact
+            nor the global interpretation for the selected ``start``/``end``
         :returns: The transformation matrix representing the pose of the end-effector
 
         ``T = robot.fkine(q)`` evaluates forward kinematics for the robot at
@@ -57,6 +66,18 @@ class RobotKinematicsMixin:
         >>> import roboticstoolbox as rtb
         >>> panda = rtb.models.Panda()
         >>> panda.fkine([0, -0.3, 0, -2.2, 0, 2, 0.7854])
+
+        On a branched robot, ``end`` selects one branch, and ``q`` may be
+        *either* the whole robot's global ``q`` *or* just the solution for
+        that branch on its own -- both give the same result:
+
+        .. runblock:: pycon
+        >>> import roboticstoolbox as rtb
+        >>> from spatialmath import SE3
+        >>> yumi = rtb.models.YuMi()
+        >>> sol = yumi.ikine_LM(SE3(0.4, 0.2, 0.3) * SE3.Rx(0.2), end="l_gripper", method="chan", k=0.1, seed=0)
+        >>> sol.q.shape
+        >>> yumi.fkine(sol.q, end="l_gripper")
 
         .. rubric:: Notes
 
@@ -505,9 +526,9 @@ class RobotKinematicsMixin:
         joint_limits: bool = True,
         k: float = 1.0,
         method: L["chan", "wampler", "sugihara"] = "chan",
-    ) -> tuple[NDArray, int, int, int, float]:
+    ) -> IKSolution:
         r"""
-        Fast levenberg-Marquadt Numerical Inverse Kinematics Solver
+        Fast Levenberg-Marquardt Numerical Inverse Kinematics Solver
 
         :param Tep: The desired end-effector pose
         :param end: the link considered as the end-effector
@@ -523,10 +544,21 @@ class RobotKinematicsMixin:
         :param k: Sets the gain value for the damping matrix Wn in the next iteration
         :param method: One of "chan", "sugihara" or "wampler". Defines which method is used
             to calculate the damping matrix Wn in the ``step`` method
-        :returns: tuple (q, success, iterations, searches, residual)
+        :returns: an IKSolution containing joint coordinates ``q``, ``success`` flag,
+            ``iterations``, ``searches`` and ``residual`` error value (``reason`` is
+            always empty -- this fast C++ solver doesn't produce a granular failure
+            reason string, unlike :meth:`ikine_LM`)
+        :rtype: IKSolution
+
+        .. warning::
+
+            This method requires the compiled C++ extension. It raises
+            ``RuntimeError`` if that extension is unavailable, e.g. in a
+            pure-Python build/wheel or under Pyodide/JupyterLite. Use
+            :meth:`ikine_LM` instead in those environments.
 
         A method which provides functionality to perform numerical inverse kinematics (IK)
-        using the Levemberg-Marquadt method. This
+        using the Levenberg-Marquardt method. This
         is a fast solver implemented in C++.
 
         See the :ref:`Inverse Kinematics Docs Page <IK>` for more details and for a
@@ -534,7 +566,7 @@ class RobotKinematicsMixin:
 
         The operation is defined by the choice of the ``method`` kwarg.
 
-        The step is deined as
+        The step is defined as
 
         .. math::
 
@@ -594,13 +626,13 @@ class RobotKinematicsMixin:
         --------
         The following example makes a ``panda`` robot object, makes a goal
         pose ``Tep``, and then solves for the joint coordinates which result in the pose
-        ``Tep`` using the `ikine_LM` method.
+        ``Tep`` using the `ik_LM` method.
 
         .. runblock:: pycon
         >>> import roboticstoolbox as rtb
         >>> panda = rtb.models.Panda()
         >>> Tep = panda.fkine([0, -0.3, 0, -2.2, 0, 2, 0.7854])
-        >>> panda.ikine_LM(Tep)
+        >>> panda.ik_LM(Tep)
 
         .. rubric:: Notes
 
@@ -621,16 +653,10 @@ class RobotKinematicsMixin:
         - J. Haviland, and P. Corke. "Manipulator Differential Kinematics Part II:
           Acceleration and Advanced Applications." arXiv preprint arXiv:2207.01794 (2022).
 
-        See Also
-        --------
-        ik_NR
-            A fast numerical inverse kinematics solver using Newton-Raphson optimisation
-        ik_GN
-            A fast numerical inverse kinematics solver using Gauss-Newton optimisation
-
+        .. seealso:: :meth:`ik_NR` :meth:`ik_GN` :meth:`ikine_LM`
 
         .. versionchanged:: 1.0.4
-            Merged the Levemberg-Marquadt IK solvers into the ik_LM method
+            Merged the Levenberg-Marquardt IK solvers into the ik_LM method
 
         """
 
@@ -659,7 +685,7 @@ class RobotKinematicsMixin:
         joint_limits: bool = True,
         pinv: int = True,
         pinv_damping: float = 0.0,
-    ) -> tuple[NDArray, int, int, int, float]:
+    ) -> IKSolution:
         r"""
         Fast numerical inverse kinematics using Newton-Raphson optimization
 
@@ -679,7 +705,18 @@ class RobotKinematicsMixin:
             another search up to the slimit)
         :param pinv: Use the pseudo-inverse instead of the normal matrix inverse
         :param pinv_damping: Damping factor for the pseudo-inverse
-        :returns: tuple (q, success, iterations, searches, residual)
+        :returns: an IKSolution containing joint coordinates ``q``, ``success`` flag,
+            ``iterations``, ``searches`` and ``residual`` error value (``reason`` is
+            always empty -- this fast C++ solver doesn't produce a granular failure
+            reason string, unlike :meth:`ikine_NR`)
+        :rtype: IKSolution
+
+        .. warning::
+
+            This method requires the compiled C++ extension. It raises
+            ``RuntimeError`` if that extension is unavailable, e.g. in a
+            pure-Python build/wheel or under Pyodide/JupyterLite. Use
+            :meth:`ikine_NR` instead in those environments.
 
         ``sol = ets.ik_NR(Tep)`` are the joint coordinates (n) corresponding
         to the robot end-effector pose ``Tep`` which is an ``SE3`` or ``ndarray`` object.
@@ -693,19 +730,20 @@ class RobotKinematicsMixin:
 
             When using this method with redundant robots (>6 DoF), ``pinv`` must be set to ``True``
 
-        The return value ``sol`` is a tuple with elements:
+        The return value ``sol`` is an ``IKSolution`` with fields:
 
         ==============  ==========  ===============================================
-        Element         Type        Description
+        Field           Type        Description
         ==============  ==========  ===============================================
         ``q``           ndarray(n)  joint coordinates in units of radians or metres
-        ``success``     int         whether a solution was found
+        ``success``     bool        whether a solution was found
         ``iterations``  int         total number of iterations
         ``searches``    int         total number of searches
         ``residual``    float       final value of cost function
+        ``reason``      str         always empty for this C++ solver
         ==============  ==========  ===============================================
 
-        If ``success == 0`` the ``q`` values will be valid numbers, but the
+        If ``success == False`` the ``q`` values will be valid numbers, but the
         solution will be in error.  The amount of error is indicated by
         the ``residual``.
 
@@ -719,7 +757,7 @@ class RobotKinematicsMixin:
         --------
         The following example gets a ``panda`` robot object, makes a goal
         pose ``Tep``, and then solves for the joint coordinates which result in the pose
-        ``Tep`` using the `ikine_GN` method.
+        ``Tep`` using the `ik_NR` method.
 
         .. runblock:: pycon
         >>> import roboticstoolbox as rtb
@@ -739,12 +777,7 @@ class RobotKinematicsMixin:
         - J. Haviland, and P. Corke. "Manipulator Differential Kinematics Part II:
           Acceleration and Advanced Applications." arXiv preprint arXiv:2207.01794 (2022).
 
-        See Also
-        --------
-        ik_LM
-            A fast numerical inverse kinematics solver using Levenberg-Marquadt optimisation
-        ik_GN
-            A fast numerical inverse kinematics solver using Gauss-Newton optimisation
+        .. seealso:: :meth:`ik_LM` :meth:`ik_GN` :meth:`ikine_NR`
 
         """
 
@@ -773,7 +806,7 @@ class RobotKinematicsMixin:
         joint_limits: bool = True,
         pinv: int = True,
         pinv_damping: float = 0.0,
-    ) -> tuple[NDArray, int, int, int, float]:
+    ) -> IKSolution:
         r"""
         Fast numerical inverse kinematics by Gauss-Newton optimization
 
@@ -793,7 +826,18 @@ class RobotKinematicsMixin:
             another search up to the slimit)
         :param pinv: Use the pseudo-inverse instead of the normal matrix inverse
         :param pinv_damping: Damping factor for the pseudo-inverse
-        :returns: tuple (q, success, iterations, searches, residual)
+        :returns: an IKSolution containing joint coordinates ``q``, ``success`` flag,
+            ``iterations``, ``searches`` and ``residual`` error value (``reason`` is
+            always empty -- this fast C++ solver doesn't produce a granular failure
+            reason string, unlike :meth:`ikine_GN`)
+        :rtype: IKSolution
+
+        .. warning::
+
+            This method requires the compiled C++ extension. It raises
+            ``RuntimeError`` if that extension is unavailable, e.g. in a
+            pure-Python build/wheel or under Pyodide/JupyterLite. Use
+            :meth:`ikine_GN` instead in those environments.
 
         ``sol = ets.ik_GN(Tep)`` are the joint coordinates (n) corresponding
         to the robot end-effector pose ``Tep`` which is an ``SE3`` or ``ndarray`` object.
@@ -807,19 +851,20 @@ class RobotKinematicsMixin:
 
             When using this method with redundant robots (>6 DoF), ``pinv`` must be set to ``True``
 
-        The return value ``sol`` is a tuple with elements:
+        The return value ``sol`` is an ``IKSolution`` with fields:
 
         ==============  ==========  ===============================================
-        Element         Type        Description
+        Field           Type        Description
         ==============  ==========  ===============================================
         ``q``           ndarray(n)  joint coordinates in units of radians or metres
-        ``success``     int         whether a solution was found
+        ``success``     bool        whether a solution was found
         ``iterations``  int         total number of iterations
         ``searches``    int         total number of searches
         ``residual``    float       final value of cost function
+        ``reason``      str         always empty for this C++ solver
         ==============  ==========  ===============================================
 
-        If ``success == 0`` the ``q`` values will be valid numbers, but the
+        If ``success == False`` the ``q`` values will be valid numbers, but the
         solution will be in error.  The amount of error is indicated by
         the ``residual``.
 
@@ -848,7 +893,7 @@ class RobotKinematicsMixin:
         --------
         The following example gets a ``panda`` robot object, makes a goal
         pose ``Tep``, and then solves for the joint coordinates which result in the pose
-        ``Tep`` using the `ikine_GN` method.
+        ``Tep`` using the `ik_GN` method.
 
         .. runblock:: pycon
         >>> import roboticstoolbox as rtb
@@ -868,12 +913,7 @@ class RobotKinematicsMixin:
         - J. Haviland, and P. Corke. "Manipulator Differential Kinematics Part II:
           Acceleration and Advanced Applications." arXiv preprint arXiv:2207.01794 (2022).
 
-        See Also
-        --------
-        ik_NR
-            A fast numerical inverse kinematics solver using Newton-Raphson optimisation
-        ik_GN
-            A fast numerical inverse kinematics solver using Gauss-Newton optimisation
+        .. seealso:: :meth:`ik_LM` :meth:`ik_NR` :meth:`ikine_GN`
 
         """
 
@@ -910,7 +950,7 @@ class RobotKinematicsMixin:
         **kwargs,
     ):
         r"""
-        Levenberg-Marquadt Numerical Inverse Kinematics Solver
+        Levenberg-Marquardt Numerical Inverse Kinematics Solver
 
         :param Tep: The desired end-effector pose
         :param end: the link considered as the end-effector
@@ -936,16 +976,20 @@ class RobotKinematicsMixin:
             allowed to approach to its limit
         :param pi: The influence angle/distance (in radians or metres) in null space motion
             becomes active
+        :returns: an IKSolution containing joint coordinates ``q``, ``success`` flag,
+            ``iterations``, ``searches``, ``residual`` error value, and ``reason``
+            string if applicable
+        :rtype: IKSolution
 
         A method which provides functionality to perform numerical inverse kinematics (IK)
-        using the Levemberg-Marquadt method.
+        using the Levenberg-Marquardt method.
 
         See the :ref:`Inverse Kinematics Docs Page <IK>` for more details and for a
         **tutorial** on numerical IK, see `here <https://bit.ly/3ak5GDi>`_.
 
         The operation is defined by the choice of the ``method`` kwarg.
 
-        The step is deined as
+        The step is defined as
 
         .. math::
 
@@ -1035,17 +1079,19 @@ class RobotKinematicsMixin:
         See Also
         --------
         :py:class:`~roboticstoolbox.robot.IK.IK_LM`
-            An IK Solver class which implements the Levemberg Marquadt optimisation technique
+            An IK Solver class which implements the Levenberg-Marquardt optimisation technique
         ikine_NR
             Implements the :py:class:`~roboticstoolbox.robot.IK.IK_NR` class as a method within the :py:class:`Robot` class
         ikine_GN
             Implements the :py:class:`~roboticstoolbox.robot.IK.IK_GN` class as a method within the :py:class:`Robot` class
         ikine_QP
             Implements the :py:class:`~roboticstoolbox.robot.IK.IK_QP` class as a method within the :py:class:`Robot` class
+        :meth:`ik_LM`
+            The fast, C++-backed equivalent of this method (requires the compiled extension)
 
 
         .. versionchanged:: 1.0.4
-            Added the Levemberg-Marquadt IK solver method on the `Robot` class
+            Added the Levenberg-Marquardt IK solver method on the `Robot` class
 
         """
 
@@ -1166,6 +1212,8 @@ class RobotKinematicsMixin:
             Implements the :py:class:`~roboticstoolbox.robot.IK.IK_GN` class as a method within the :py:class:`ETS` class
         ikine_QP
             Implements the :py:class:`~roboticstoolbox.robot.IK.IK_QP` class as a method within the :py:class:`ETS` class
+        :meth:`ik_NR`
+            The fast, C++-backed equivalent of this method (requires the compiled extension)
 
 
         .. versionchanged:: 1.0.4
@@ -1296,14 +1344,16 @@ class RobotKinematicsMixin:
 
         See Also
         --------
-        :py:class:`~roboticstoolbox.robot.IK.IK_NR`
-            An IK Solver class which implements the Newton-Raphson optimisation technique
+        :py:class:`~roboticstoolbox.robot.IK.IK_GN`
+            An IK Solver class which implements the Gauss-Newton optimisation technique
         ikine_LM
             Implements the :py:class:`~roboticstoolbox.robot.IK.IK_LM` class as a method within the :py:class:`ETS` class
         ikine_NR
             Implements the :py:class:`~roboticstoolbox.robot.IK.IK_NR` class as a method within the :py:class:`ETS` class
         ikine_QP
             Implements the :py:class:`~roboticstoolbox.robot.IK.IK_QP` class as a method within the :py:class:`ETS` class
+        :meth:`ik_GN`
+            The fast, C++-backed equivalent of this method (requires the compiled extension)
 
 
         .. versionchanged:: 1.0.4
@@ -1375,9 +1425,13 @@ class RobotKinematicsMixin:
         :param pi: The influence angle/distance (in radians or metres) in null space motion
             becomes active
         :raises ImportError: If the package ``qpsolvers`` is not installed
+        :returns: an IKSolution containing joint coordinates ``q``, ``success`` flag,
+            ``iterations``, ``searches``, ``residual`` error value, and ``reason``
+            string if applicable
+        :rtype: IKSolution
 
         A method that provides functionality to perform numerical inverse kinematics
-        (IK) using a quadratic progamming approach.
+        (IK) using a quadratic programming approach.
 
         See the :ref:`Inverse Kinematics Docs Page <IK>` for more details and for a
         **tutorial** on numerical IK, see `here <https://bit.ly/3ak5GDi>`_.
@@ -1471,8 +1525,8 @@ class RobotKinematicsMixin:
 
         See Also
         --------
-        :py:class:`~roboticstoolbox.robot.IK.IK_NR`
-            An IK Solver class which implements the Newton-Raphson optimisation technique
+        :py:class:`~roboticstoolbox.robot.IK.IK_QP`
+            An IK Solver class which implements a quadratic programming approach
         ikine_LM
             Implements the :py:class:`~roboticstoolbox.robot.IK.IK_LM` class as a method within the :py:class:`ETS` class
         ikine_GN

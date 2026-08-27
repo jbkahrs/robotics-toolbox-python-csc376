@@ -46,6 +46,12 @@ class IKSolution:
     .. versionchanged:: 1.0.3
         Added IKSolution dataclass to replace the IKsolution named tuple
 
+    .. versionchanged:: 1.4.2
+        Added ``__getitem__`` (positional indexing matching ``__iter__``'s
+        order) and a ``__repr__`` matching ``__str__``, so ``ik_LM``/``ik_NR``/
+        ``ik_GN`` (which now also return ``IKSolution``, see :meth:`ETS.ik_LM`)
+        remain compatible with code that indexed the old bare tuple return
+
     """
 
     q: np.ndarray
@@ -66,6 +72,12 @@ class IKSolution:
                 self.reason,
             )
         )
+
+    def __getitem__(self, i):
+        return tuple(self)[i]
+
+    def __repr__(self):
+        return str(self)
 
     def __str__(self):
         if self.q is not None:
@@ -134,7 +146,7 @@ class IKSolver(ABC):
 
         :class:`IK_GN` Implements this class using the Gauss-Newton method
 
-        :class:`IK_LM` Implements this class using the Levemberg-Marquadt method
+        :class:`IK_LM` Implements this class using the Levenberg-Marquardt method
 
         :class:`IK_QP` Implements this class using a quadratic programming approach
 
@@ -344,7 +356,7 @@ class IKSolver(ABC):
             reason += ", solution found but violates joint limits"
 
         return IKSolution(
-            q=q,
+            q=q[ets.jindices],
             success=False,
             iterations=total_i,
             searches=self.slimit,
@@ -406,24 +418,35 @@ class IKSolver(ABC):
         :returns: An ``i x n`` ndarray of random valid joint configurations, where n
             is the number of joints in the ``ets``
         :rtype: numpy.ndarray
+        :raises ValueError: a joint's qlim is not finite (e.g. ``inf``/``-inf``
+            or ``NaN``, typically from a bad value in a robot model's own
+            joint-limit data)
 
         Generates a random q vector within the joint limits defined by ``ets.qlim``.
         """
+
+        qlim = ets.qlim
+
+        if not np.all(np.isfinite(qlim)):
+            bad = np.flatnonzero(~np.all(np.isfinite(qlim), axis=0))
+            raise ValueError(
+                f"Joint limit(s) for joint index(es) {bad.tolist()} are not "
+                f"finite (qlim={qlim[:, bad].tolist()}) -- can't generate a "
+                "random configuration within an infinite/undefined range."
+            )
 
         if i == 1:
             q = np.zeros((1, ets.n))
 
             for i in range(ets.n):
-                q[0, i] = self._private_random.uniform(ets.qlim[0, i], ets.qlim[1, i])
+                q[0, i] = self._private_random.uniform(qlim[0, i], qlim[1, i])
 
         else:
             q = np.zeros((i, ets.n))
 
             for j in range(i):
                 for i in range(ets.n):
-                    q[j, i] = self._private_random.uniform(
-                        ets.qlim[0, i], ets.qlim[1, i]
-                    )
+                    q[j, i] = self._private_random.uniform(qlim[0, i], qlim[1, i])
 
         return q
 
@@ -601,7 +624,7 @@ class IK_NR(IKSolver):
 
         :class:`IK_GN` Implements the IKSolver class using the Gauss-Newton method
 
-        :class:`IK_LM` Implements the IKSolver class using the Levemberg-Marquadt method
+        :class:`IK_LM` Implements the IKSolver class using the Levenberg-Marquardt method
 
         :class:`IK_QP` Implements the IKSolver class using a quadratic programming approach
 
@@ -691,10 +714,10 @@ class IK_NR(IKSolver):
 
 class IK_LM(IKSolver):
     r"""
-    Levemberg-Marquadt Numerical Inverse Kinematics Solver
+    Levenberg-Marquardt Numerical Inverse Kinematics Solver
 
     A class which provides functionality to perform numerical inverse kinematics (IK)
-    using the Levemberg-Marquadt method. See ``step`` method for mathematical description.
+    using the Levenberg-Marquardt method. See ``step`` method for mathematical description.
 
     :param name: The name of the IK algorithm
     :param ilimit: How many iterations are allowed within a search before a new search
@@ -771,7 +794,7 @@ class IK_LM(IKSolver):
         :class:`IK_QP` Implements the IKSolver class using a quadratic programming approach
 
     .. versionchanged:: 1.0.3
-        Added the Levemberg-Marquadt IK solver class
+        Added the Levenberg-Marquardt IK solver class
 
     """
 
@@ -829,7 +852,7 @@ class IK_LM(IKSolver):
 
     def step(self, ets: "rtb.ETS", Tep: np.ndarray, q: np.ndarray):
         r"""
-        Performs a single iteration of the Levenberg-Marquadt optimisation
+        Performs a single iteration of the Levenberg-Marquardt optimisation
 
         :param ets: The ETS representing the manipulators kinematics
         :param Tep: The desired end-effector pose
@@ -997,7 +1020,7 @@ class IK_GN(IKSolver):
 
         :class:`IK_NR` Implements IKSolver using the Newton-Raphson method
 
-        :class:`IK_LM` Implements IKSolver using the Levemberg-Marquadt method
+        :class:`IK_LM` Implements IKSolver using the Levenberg-Marquardt method
 
         :class:`IK_QP` Implements IKSolver using a quadratic programming approach
 
@@ -1106,7 +1129,7 @@ class IK_QP(IKSolver):
     Quadratic Progamming Numerical Inverse Kinematics Solver
 
     A class which provides functionality to perform numerical inverse kinematics (IK)
-    using a quadratic progamming approach. See `step` method for mathematical
+    using a quadratic programming approach. See `step` method for mathematical
     description.
 
     :param name: The name of the IK algorithm
@@ -1172,7 +1195,7 @@ class IK_QP(IKSolver):
 
         :class:`IK_GN` Implements IKSolver class using the Gauss-Newton method
 
-        :class:`IK_LM` Implements IKSolver class using the Levemberg-Marquadt method
+        :class:`IK_LM` Implements IKSolver class using the Levenberg-Marquardt method
 
     .. versionchanged:: 1.0.3
         Added the Quadratic Programming IK solver class
