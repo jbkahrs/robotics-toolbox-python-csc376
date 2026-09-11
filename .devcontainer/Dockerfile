@@ -19,6 +19,14 @@ COPY --chown=vscode:vscode requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt \
     && rm /tmp/requirements.txt
 
+# Swift's page JS drops the first two characters of mesh and texture paths whenever the
+# browser runs on Windows, to strip a drive letter ("C:"). Python here runs on Linux, so
+# that turns /workspaces/... into orkspaces/... Strip only an actual drive letter instead.
+RUN cd /opt/venv/lib/python3.12/site-packages/swift/public/js \
+    && sed -i 's|filename = filename.slice(2);|filename = filename.replace(/^[A-Za-z]:/, "");|' shapes.js scene.js \
+    && grep -qF 'filename = filename.replace(/^[A-Za-z]:/, "");' shapes.js \
+    && grep -qF 'filename = filename.replace(/^[A-Za-z]:/, "");' scene.js
+
 # Keep VS Code from port-forwarding the Swift page (see browser.sh and sitecustomize.py)
 COPY --chmod=755 browser.sh /usr/local/bin/devcontainer-browser
 COPY --chown=vscode:vscode sitecustomize.py /opt/venv/lib/python3.12/site-packages/
