@@ -32,7 +32,7 @@ so you can skip step 2.
    *Dev Containers: Reopen in Container* from the command palette (`Ctrl+Shift+P`).
 3. The first build downloads and compiles everything and takes several minutes. Later
    opens are fast.
-4. Open a notebook, such as `csc376_practical1.ipynb`. Choose **Select Kernel → Python
+4. Copy one of the .ipynb files from quercus (such as `csc376_practical1.ipynb`) into this repo's folder. Choose **Select Kernel → Python
    Environments**, then pick the environment at `/opt/venv/bin/python`.
 
 When a notebook calls `env.launch()`, Swift opens a new browser tab on your computer at
@@ -47,16 +47,6 @@ When a notebook calls `env.launch()`, Swift opens a new browser tab on your comp
   to show the simulator inside the notebook instead.
 - Close old Swift tabs. If one still shows an old page, hard-refresh it (`Ctrl+Shift+R`).
 
-**Blank Swift page, missing robot links, or `ERR_CONTENT_LENGTH_MISMATCH` in the browser
-console**: check the Swift tab's address bar. It should show `127.0.0.2:52000`. The
-container opens Swift there on purpose, because VS Code forwards `localhost` URLs and its
-forwarding cuts the large mesh files short. If the tab shows `localhost` with a different
-port, run *Dev Containers: Rebuild Container*, then restart the kernel and close the old
-Swift tab. You can also clear old forwards under **Ports → Stop Forwarding Port**.
-
-**Using JupyterLab instead of VS Code notebooks**: in a VS Code terminal, run
-`jupyter lab --no-browser`. Then open the `http://localhost:8888/...` link it prints.
-Launch Swift with `browser="notebook"`.
 
 **Toolbox changes**: the toolbox is installed in editable mode, so a `git pull` of
 Python changes takes effect after a kernel restart. If C++ code changed, run
