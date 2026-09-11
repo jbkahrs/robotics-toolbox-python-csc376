@@ -1,0 +1,39 @@
+# Dependencies of roboticstoolbox-python[all] (see ../pyproject.toml), pre-installed
+# into the image. postCreateCommand installs the toolbox itself from this repo and
+# picks up anything that drifts out of sync with pyproject.toml.
+numpy
+scipy
+matplotlib
+spatialmath-python>=1.1.16
+spatialgeometry>=1.4.0
+pgraph-python
+ansitable
+progress
+typing_extensions
+colored>2.0.0
+xacrodoc
+robot_descriptions>=2.0,<3.0
+swift-sim>=2.0.0
+websockets
+qpsolvers
+quadprog
+coal
+trimesh
+ipython
+pygments
+sympy
+
+# Build backends and tools for the compiled extensions, so postCreateCommand can
+# use --no-build-isolation
+scikit-build-core>=0.9
+nanobind>=2
+hatchling>=1.25
+editables
+cmake
+ninja
+
+# Notebooks
+jupyterlab
+ipykernel
+ipywidgets
+ipympl

@@ -1,0 +1,34 @@
+{
+  "name": "CSC376 Robotics Toolbox",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+
+  // Share the host's network so the browser can reach the Swift simulator's web
+  // server (port 52000+) and its websocket (port 53000+, bound to localhost only).
+  // On Windows this needs Docker Desktop 4.34+ with host networking enabled; see README.md.
+  "runArgs": ["--net=host"],
+
+  "remoteUser": "vscode",
+
+  // Install the toolbox (and its data package) from this repo in editable mode
+  "postCreateCommand": "pip install --no-build-isolation -e ./rtb-data -e '.[all]'",
+
+  // Host networking already exposes Swift's ports, so don't auto-forward them. VS Code's
+  // forwarding truncates Swift's mesh downloads; the Swift tab itself is kept off the
+  // forwarded port by browser.sh and sitecustomize.py (see Dockerfile).
+  "portsAttributes": {
+    "52000-52010": { "label": "Swift simulator", "onAutoForward": "ignore" },
+    "53000-53010": { "label": "Swift websocket", "onAutoForward": "ignore" },
+    "8888": { "label": "JupyterLab" }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python", "ms-toolsai.jupyter"],
+      "settings": {
+        "python.defaultInterpreterPath": "/opt/venv/bin/python"
+      }
+    }
+  }
+}
