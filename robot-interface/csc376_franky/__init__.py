@@ -7,7 +7,13 @@ server on the station's miniPC (FrankaJointTrajectoryController).
 
 __version__ = "2.1.0"
 
-from .client import FrankaJointTrajectoryController, Gripper, GripperState, RobotError, RobotState
+from .client import (
+    FrankaJointTrajectoryController,
+    Gripper,
+    GripperState,
+    RobotError,
+    RobotState,
+)
 from .protocol import DEFAULT_HOST, DEFAULT_PORT, ErrorCodes
 
 __all__ = [

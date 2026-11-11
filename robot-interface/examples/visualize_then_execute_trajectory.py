@@ -1,10 +1,11 @@
 import numpy as np
 import roboticstoolbox as rtb
-from csc376_franky.visualizer import RtbVisualizer
-from csc376_franky.motion_generator import RuckigMotionGenerator
 from spatialmath import SE3
 
 from csc376_franky import FrankaJointTrajectoryController
+from csc376_franky.motion_generator import RuckigMotionGenerator
+from csc376_franky.visualizer import RtbVisualizer
+
 
 def main():
     np.set_printoptions(precision=4, suppress=True)
@@ -18,23 +19,34 @@ def main():
     panda_rtb_model = rtb.models.Panda()
     motion_generator = RuckigMotionGenerator()
 
-    csc376_franky_robot = FrankaJointTrajectoryController() # The robot server on this station's miniPC
+    csc376_franky_robot = (
+        FrankaJointTrajectoryController()
+    )  # The robot server on this station's miniPC
 
     q_start = csc376_franky_robot.get_current_joint_positions()
     # The translucent blue Panda shows where the real robot is
     visualizer = RtbVisualizer(panda_rtb_model, q_start, real_robot=csc376_franky_robot)
 
     # III. Calculate your goal
-    se3_start   = panda_rtb_model.fkine(q_start)
-    se3_target = SE3.Ty(0.1) * se3_start # Relative to start position, pre-multiply for world frame reference
+    se3_start = panda_rtb_model.fkine(q_start)
+    se3_target = (
+        SE3.Ty(0.1) * se3_start
+    )  # Relative to start position, pre-multiply for world frame reference
     print("q_start", q_start)
     print("se3_start", se3_start)
     print("se3_target", se3_target)
 
     # IV. Visualize the trajectory in simulation
-    cartesian_traj, dt = motion_generator.calculate_cartesian_pose_trajectory(se3_start, se3_target,
-                                                                              relative_vel_factor, relative_acc_factor, relative_jerk_factor) # Interpolation and trajectory parameterization
-    q_traj = motion_generator.cartesian_pose_to_joint_trajectory(panda_rtb_model, q_start, cartesian_traj)
+    cartesian_traj, dt = motion_generator.calculate_cartesian_pose_trajectory(
+        se3_start,
+        se3_target,
+        relative_vel_factor,
+        relative_acc_factor,
+        relative_jerk_factor,
+    )  # Interpolation and trajectory parameterization
+    q_traj = motion_generator.cartesian_pose_to_joint_trajectory(
+        panda_rtb_model, q_start, cartesian_traj
+    )
     input("Press enter, to run in visualizer\n")
     visualizer.move_gripper(0.07, 0.1)
     visualizer.run_joint_trajectory(q_traj, dt)
@@ -49,6 +61,7 @@ def main():
     csc376_franky_robot.run_joint_trajectory(q_traj, dt)
     return visualizer
 
+
 if __name__ == "__main__":
     visualizer = main()
-    visualizer.stop() # Makes sure render thread ends
+    visualizer.stop()  # Makes sure render thread ends

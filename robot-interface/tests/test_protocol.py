@@ -32,7 +32,9 @@ def test_client_and_server_have_the_same_version(native):
 
 
 def test_messages_are_single_lines():
-    line = protocol.encode({"op": "execute", "trajectory": [[0.1] * 7] * 2, "note": "a\nb"})
+    line = protocol.encode(
+        {"op": "execute", "trajectory": [[0.1] * 7] * 2, "note": "a\nb"}
+    )
     assert line.endswith(b"\n") and line.count(b"\n") == 1
     assert protocol.decode(line)["note"] == "a\nb"
 

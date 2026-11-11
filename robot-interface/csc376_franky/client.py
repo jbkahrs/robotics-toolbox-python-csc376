@@ -102,7 +102,9 @@ class _Connection:
         try:
             self._sock = socket.create_connection((host, port), timeout=timeout)
         except OSError as error:
-            raise RobotError(ErrorCodes.ServerUnavailable, self._unavailable(error)) from None
+            raise RobotError(
+                ErrorCodes.ServerUnavailable, self._unavailable(error)
+            ) from None
         self._sock.settimeout(None)
         self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self._file = self._sock.makefile("rb")
@@ -115,17 +117,25 @@ class _Connection:
         self._state = None
         self._state_time = 0.0
         self._state_changed = threading.Condition()
-        threading.Thread(target=self._read_loop, name="csc376-robot-reader", daemon=True).start()
-        threading.Thread(target=self._heartbeat_loop, name="csc376-robot-heartbeat", daemon=True).start()
+        threading.Thread(
+            target=self._read_loop, name="csc376-robot-reader", daemon=True
+        ).start()
+        threading.Thread(
+            target=self._heartbeat_loop, name="csc376-robot-heartbeat", daemon=True
+        ).start()
 
     def _unavailable(self, error):
         text = f"Cannot reach the robot server at {self.host}:{self.port} ({error})."
         if self.host == protocol.ROBOT_IP:
-            text += (f" {protocol.ROBOT_IP} is the robot itself: the robot server runs on the station's miniPC, "
-                     f"{protocol.DEFAULT_HOST}.")
+            text += (
+                f" {protocol.ROBOT_IP} is the robot itself: the robot server runs on the station's miniPC, "
+                f"{protocol.DEFAULT_HOST}."
+            )
         else:
-            text += (" Check that this PC is on the station's robot network and that the robot server is running "
-                     "on the miniPC.")
+            text += (
+                " Check that this PC is on the station's robot network and that the robot server is running "
+                "on the miniPC."
+            )
         return text
 
     @property
@@ -133,7 +143,10 @@ class _Connection:
         return self._closed
 
     def closed_error(self):
-        return RobotError(ErrorCodes.ConnectionLost, f"Not connected to the robot server: {self._close_reason}")
+        return RobotError(
+            ErrorCodes.ConnectionLost,
+            f"Not connected to the robot server: {self._close_reason}",
+        )
 
     def start_request(self, op, **fields):
         """Send a request; returns the future of its result and the request's id."""
@@ -161,7 +174,10 @@ class _Connection:
         try:
             return future.result(timeout)
         except concurrent.futures.TimeoutError:
-            raise RobotError(ErrorCodes.Timeout, f"The robot server did not answer {op!r} within {timeout} s") from None
+            raise RobotError(
+                ErrorCodes.Timeout,
+                f"The robot server did not answer {op!r} within {timeout} s",
+            ) from None
 
     def notify(self, op, **fields):
         self._send({"op": op, **fields})
@@ -170,7 +186,10 @@ class _Connection:
         try:
             data = protocol.encode(message)
         except ValueError:
-            raise RobotError(ErrorCodes.NonFiniteValue, "Values sent to the robot must be finite numbers") from None
+            raise RobotError(
+                ErrorCodes.NonFiniteValue,
+                "Values sent to the robot must be finite numbers",
+            ) from None
         with self._send_lock:
             if self._closed:
                 raise self.closed_error()
@@ -189,7 +208,11 @@ class _Connection:
         """The first state message, new or already received, that predicate accepts; None on timeout."""
         with self._state_changed:
             ready = self._state_changed.wait_for(
-                lambda: self._closed or (self._state is not None and predicate(self._state)), timeout)
+                lambda: (
+                    self._closed or (self._state is not None and predicate(self._state))
+                ),
+                timeout,
+            )
             if ready and not self._closed:
                 return self._state
             return None
@@ -213,8 +236,12 @@ class _Connection:
                         future.set_result(message.get("result") or {})
                     else:
                         error = message.get("error") or {}
-                        future.set_exception(RobotError(error.get("code", ErrorCodes.InvalidRequest),
-                                                        error.get("message", "")))
+                        future.set_exception(
+                            RobotError(
+                                error.get("code", ErrorCodes.InvalidRequest),
+                                error.get("message", ""),
+                            )
+                        )
         except (OSError, ValueError) as error:
             reason = f"connection lost ({error})"
         finally:
@@ -267,16 +294,26 @@ class FrankaJointTrajectoryController:
         self._connection = _Connection(self.host, self.port, timeout)
         try:
             self.server_info = self._connection.request(
-                "hello", timeout=timeout, protocol=protocol.PROTOCOL_VERSION,
-                client={"host": socket.gethostname(), "program": os.path.basename(sys.argv[0]) or "python",
-                        "library": f"csc376_franky {__version__}"})
+                "hello",
+                timeout=timeout,
+                protocol=protocol.PROTOCOL_VERSION,
+                client={
+                    "host": socket.gethostname(),
+                    "program": os.path.basename(sys.argv[0]) or "python",
+                    "library": f"csc376_franky {__version__}",
+                },
+            )
             if wait_for_robot:
                 self.wait_for_robot(timeout)
         except BaseException:
             self._connection.close()
             raise
         self.session = self.server_info["session"]
-        self.gripper = Gripper(_connection=self._connection) if self.server_info.get("gripper") else None
+        self.gripper = (
+            Gripper(_connection=self._connection)
+            if self.server_info.get("gripper")
+            else None
+        )
         self._trajectory_callback = None
 
     def __enter__(self):
@@ -293,35 +330,50 @@ class FrankaJointTrajectoryController:
 
     def wait_for_robot(self, timeout=10.0):
         """Wait until the miniPC is connected to the robot and reports its state."""
-        if self._connection.wait_for_state(lambda s: "q" in s["robot"], timeout) is None:
+        if (
+            self._connection.wait_for_state(lambda s: "q" in s["robot"], timeout)
+            is None
+        ):
             if self._connection.closed:
                 raise self._connection.closed_error()
             state, _ = self._connection.latest_state()
             error = state["robot"].get("error") if state else None
             raise RobotError(
                 ErrorCodes.RobotNotConnected,
-                "The miniPC cannot reach the robot" + (f" ({error})" if error else "") +
-                ". Check that the robot is on, its brakes are open and FCI is active in Desk.")
+                "The miniPC cannot reach the robot"
+                + (f" ({error})" if error else "")
+                + ". Check that the robot is on, its brakes are open and FCI is active in Desk.",
+            )
 
     def _robot(self):
         if self._connection.closed:
             raise self._connection.closed_error()
         state, age = self._connection.latest_state()
         if state is None or age > STATE_TIMEOUT:
-            raise RobotError(ErrorCodes.ConnectionLost, "No robot state from the robot server for over a second")
+            raise RobotError(
+                ErrorCodes.ConnectionLost,
+                "No robot state from the robot server for over a second",
+            )
         robot = state["robot"]
         if "q" not in robot:
             error = robot.get("error")
-            raise RobotError(ErrorCodes.RobotNotConnected,
-                             "The miniPC is not connected to the robot" + (f": {error}" if error else ""))
+            raise RobotError(
+                ErrorCodes.RobotNotConnected,
+                "The miniPC is not connected to the robot"
+                + (f": {error}" if error else ""),
+            )
         return robot
 
     def get_current_robot_state(self):
         """The latest RobotState from the miniPC (at most 20 ms old)."""
         robot = self._robot()
         fields = {name: robot[name] for name in RobotState.__dataclass_fields__}
-        return RobotState(**{name: tuple(value) if isinstance(value, list) else value
-                             for name, value in fields.items()})
+        return RobotState(
+            **{
+                name: tuple(value) if isinstance(value, list) else value
+                for name, value in fields.items()
+            }
+        )
 
     def get_current_joint_positions(self):
         """The measured joint positions [rad], as an array of 7."""
@@ -336,7 +388,9 @@ class FrankaJointTrajectoryController:
         from spatialmath import SE3
         from spatialmath.base import trnorm
 
-        return SE3(trnorm(np.array(self._robot()["O_T_EE"], dtype=float).reshape(4, 4).T))
+        return SE3(
+            trnorm(np.array(self._robot()["O_T_EE"], dtype=float).reshape(4, 4).T)
+        )
 
     def get_status(self):
         """The server's latest state message as a dict: robot, trajectory and gripper."""
@@ -352,7 +406,9 @@ class FrankaJointTrajectoryController:
     def wait_until_idle(self, timeout=None):
         """Wait until no trajectory is running; False on timeout."""
         state = self._connection.wait_for_state(
-            lambda s: not s.get("trajectory") and s["robot"].get("status") == "idle", timeout)
+            lambda s: not s.get("trajectory") and s["robot"].get("status") == "idle",
+            timeout,
+        )
         if state is None and self._connection.closed:
             raise self._connection.closed_error()
         return state is not None
@@ -380,15 +436,24 @@ class FrankaJointTrajectoryController:
         try:
             trajectory = np.asarray(joint_trajectory, dtype=float)
         except (TypeError, ValueError):
-            raise RobotError(ErrorCodes.JointSizeNotSeven,
-                             "joint_trajectory must be a list of joint positions, each 7 numbers") from None
+            raise RobotError(
+                ErrorCodes.JointSizeNotSeven,
+                "joint_trajectory must be a list of joint positions, each 7 numbers",
+            ) from None
         if trajectory.ndim != 2 or trajectory.shape[1] != 7:
-            raise RobotError(ErrorCodes.JointSizeNotSeven,
-                             f"joint_trajectory must be N x 7, not {'x'.join(map(str, trajectory.shape))}")
+            raise RobotError(
+                ErrorCodes.JointSizeNotSeven,
+                f"joint_trajectory must be N x 7, not {'x'.join(map(str, trajectory.shape))}",
+            )
         if not np.isfinite(trajectory).all() or not np.isfinite(dt):
-            raise RobotError(ErrorCodes.NonFiniteValue, "joint_trajectory and dt must be finite numbers")
+            raise RobotError(
+                ErrorCodes.NonFiniteValue,
+                "joint_trajectory and dt must be finite numbers",
+            )
 
-        future, request_id = self._connection.start_request("execute", trajectory=trajectory.tolist(), dt=float(dt))
+        future, request_id = self._connection.start_request(
+            "execute", trajectory=trajectory.tolist(), dt=float(dt)
+        )
         index = -1
         try:
             while True:
@@ -409,7 +474,11 @@ class FrankaJointTrajectoryController:
         if end is None:
             state, _ = self._connection.latest_state()
             trajectory = state.get("trajectory") if state else None
-            if not trajectory or trajectory["session"] != self.session or trajectory["request"] != request_id:
+            if (
+                not trajectory
+                or trajectory["session"] != self.session
+                or trajectory["request"] != request_id
+            ):
                 return index
             end = trajectory["index"]
         for i in range(index + 1, end + 1):
@@ -427,8 +496,12 @@ class FrankaJointTrajectoryController:
         run_joint_trajectory; Ctrl+C stops the robot, then raises KeyboardInterrupt.
         """
         if not np.isfinite(speed_factor):
-            raise RobotError(ErrorCodes.NonFiniteValue, "speed_factor must be a finite number")
-        future = self._connection.request_async("move_home", speed_factor=float(speed_factor))
+            raise RobotError(
+                ErrorCodes.NonFiniteValue, "speed_factor must be a finite number"
+            )
+        future = self._connection.request_async(
+            "move_home", speed_factor=float(speed_factor)
+        )
         try:
             while True:
                 try:
@@ -463,7 +536,10 @@ class FrankaJointTrajectoryController:
     def move_gripper(self, width, speed=0.1):
         """Move the gripper fingers to width [m] at speed [m/s]."""
         if self.gripper is None:
-            raise RobotError(ErrorCodes.GripperNotConnected, "The robot server runs without a gripper")
+            raise RobotError(
+                ErrorCodes.GripperNotConnected,
+                "The robot server runs without a gripper",
+            )
         return self.gripper.move(width, speed)
 
     # Kept so programs written for csc376_bind_franky still run.
@@ -485,23 +561,41 @@ class Gripper:
     def __init__(self, host=None, port=None, *, timeout=10.0, _connection=None):
         self._owns_connection = _connection is None
         if _connection is None:
-            _connection = _Connection(host or _default_host(), int(port or _default_port()), timeout)
+            _connection = _Connection(
+                host or _default_host(), int(port or _default_port()), timeout
+            )
             try:
                 info = _connection.request(
-                    "hello", timeout=timeout, protocol=protocol.PROTOCOL_VERSION,
-                    client={"host": socket.gethostname(), "program": os.path.basename(sys.argv[0]) or "python",
-                            "library": f"csc376_franky {__version__}"})
+                    "hello",
+                    timeout=timeout,
+                    protocol=protocol.PROTOCOL_VERSION,
+                    client={
+                        "host": socket.gethostname(),
+                        "program": os.path.basename(sys.argv[0]) or "python",
+                        "library": f"csc376_franky {__version__}",
+                    },
+                )
                 if not info.get("gripper"):
-                    raise RobotError(ErrorCodes.GripperNotConnected, "The robot server runs without a gripper")
-                if _connection.wait_for_state(lambda s: "width" in s["gripper"], timeout) is None:
+                    raise RobotError(
+                        ErrorCodes.GripperNotConnected,
+                        "The robot server runs without a gripper",
+                    )
+                if (
+                    _connection.wait_for_state(
+                        lambda s: "width" in s["gripper"], timeout
+                    )
+                    is None
+                ):
                     if _connection.closed:
                         raise _connection.closed_error()
                     state, _ = _connection.latest_state()
                     error = state["gripper"].get("error") if state else None
                     raise RobotError(
                         ErrorCodes.GripperNotConnected,
-                        "The miniPC cannot reach the gripper" + (f" ({error})" if error else "") +
-                        ". Check that the Franka Hand is connected and the robot is on.")
+                        "The miniPC cannot reach the gripper"
+                        + (f" ({error})" if error else "")
+                        + ". Check that the Franka Hand is connected and the robot is on.",
+                    )
             except BaseException:
                 _connection.close()
                 raise
@@ -518,14 +612,19 @@ class Gripper:
             self._connection.close()
 
     def _command_async(self, op, **fields):
-        return _map_future(self._connection.request_async(op, **fields), lambda result: result["success"])
+        return _map_future(
+            self._connection.request_async(op, **fields),
+            lambda result: result["success"],
+        )
 
     def _command(self, op, **fields):
         future = self._command_async(op, **fields)
         try:
             return future.result(timeout=60.0)
         except concurrent.futures.TimeoutError:
-            raise RobotError(ErrorCodes.Timeout, f"The gripper did not finish {op} within 60 s") from None
+            raise RobotError(
+                ErrorCodes.Timeout, f"The gripper did not finish {op} within 60 s"
+            ) from None
 
     def homing(self):
         """Calibrate the fingers by opening and closing them fully."""
@@ -538,8 +637,14 @@ class Gripper:
     def grasp(self, width, speed, force, epsilon_inner=0.005, epsilon_outer=0.005):
         """Close on an object of width [m] with force [N]. True if the object was
         grasped: the fingers stopped between width - epsilon_inner and width + epsilon_outer."""
-        return self._command("gripper_grasp", width=width, speed=speed, force=force,
-                             epsilon_inner=epsilon_inner, epsilon_outer=epsilon_outer)
+        return self._command(
+            "gripper_grasp",
+            width=width,
+            speed=speed,
+            force=force,
+            epsilon_inner=epsilon_inner,
+            epsilon_outer=epsilon_outer,
+        )
 
     def open(self, speed):
         """Open the fingers fully."""
@@ -555,9 +660,17 @@ class Gripper:
     def move_async(self, width, speed):
         return self._command_async("gripper_move", width=width, speed=speed)
 
-    def grasp_async(self, width, speed, force, epsilon_inner=0.005, epsilon_outer=0.005):
-        return self._command_async("gripper_grasp", width=width, speed=speed, force=force,
-                                   epsilon_inner=epsilon_inner, epsilon_outer=epsilon_outer)
+    def grasp_async(
+        self, width, speed, force, epsilon_inner=0.005, epsilon_outer=0.005
+    ):
+        return self._command_async(
+            "gripper_grasp",
+            width=width,
+            speed=speed,
+            force=force,
+            epsilon_inner=epsilon_inner,
+            epsilon_outer=epsilon_outer,
+        )
 
     def open_async(self, speed):
         return self.move_async(self.max_width, speed)
@@ -574,9 +687,14 @@ class Gripper:
         gripper = state["gripper"] if state is not None and age <= STATE_TIMEOUT else {}
         if "width" not in gripper:
             error = gripper.get("error")
-            raise RobotError(ErrorCodes.GripperNotConnected,
-                             "The miniPC is not connected to the gripper" + (f": {error}" if error else ""))
-        return GripperState(**{name: gripper[name] for name in GripperState.__dataclass_fields__})
+            raise RobotError(
+                ErrorCodes.GripperNotConnected,
+                "The miniPC is not connected to the gripper"
+                + (f": {error}" if error else ""),
+            )
+        return GripperState(
+            **{name: gripper[name] for name in GripperState.__dataclass_fields__}
+        )
 
     @property
     def width(self):

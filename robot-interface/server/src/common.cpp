@@ -29,7 +29,8 @@ const char* errorCodeName(ErrorCodes code)
     case ErrorCodes::DtIsNegative: return "DtIsNegative";
     case ErrorCodes::DtIsSmallerThanAllowed: return "DtIsSmallerThanAllowed";
     case ErrorCodes::Interrupted: return "Interrupted";
-    case ErrorCodes::JointTrajectoryDoesNotStartAtCurrentPosition: return "JointTrajectoryDoesNotStartAtCurrentPosition";
+    case ErrorCodes::JointTrajectoryDoesNotStartAtCurrentPosition:
+        return "JointTrajectoryDoesNotStartAtCurrentPosition";
     case ErrorCodes::TrajectorySizeLessThanTwo: return "TrajectorySizeLessThanTwo";
     case ErrorCodes::NonFiniteValue: return "NonFiniteValue";
     case ErrorCodes::JointLimitsExceeded: return "JointLimitsExceeded";

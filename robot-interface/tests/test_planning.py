@@ -5,10 +5,10 @@ import pytest
 
 rtb = pytest.importorskip("roboticstoolbox")
 pytest.importorskip("ruckig")
-from spatialmath import SE3  # noqa: E402
+from spatialmath import SE3
 
-from csc376_franky import ErrorCodes  # noqa: E402
-from csc376_franky.motion_generator import RuckigMotionGenerator  # noqa: E402
+from csc376_franky import ErrorCodes
+from csc376_franky.motion_generator import RuckigMotionGenerator
 
 
 @pytest.fixture(scope="module")
@@ -36,10 +36,15 @@ def test_straight_line_from_the_start_to_the_target(panda):
     # It starts exactly where the robot is...
     np.testing.assert_allclose(q_traj[0], panda.qr, atol=1e-9)
     # ...ends at the target, and the hand keeps its orientation on a straight line.
-    np.testing.assert_allclose(panda.fkine(q_traj[-1]).A, se3_target.A, atol=IK_ACCURACY)
+    np.testing.assert_allclose(
+        panda.fkine(q_traj[-1]).A, se3_target.A, atol=IK_ACCURACY
+    )
     for q in q_traj:
         pose = panda.fkine(q)
-        assert abs(pose.t[0] - se3_start.t[0]) < IK_ACCURACY and abs(pose.t[2] - se3_start.t[2]) < IK_ACCURACY
+        assert (
+            abs(pose.t[0] - se3_start.t[0]) < IK_ACCURACY
+            and abs(pose.t[2] - se3_start.t[2]) < IK_ACCURACY
+        )
         np.testing.assert_allclose(pose.R, se3_start.R, atol=IK_ACCURACY)
 
 
@@ -51,8 +56,14 @@ def test_joints_never_stall_while_the_hand_moves(panda):
     assert (steps[2:-2] > 0.0).all()
 
 
-@pytest.mark.parametrize("q_start", [rtb.models.Panda().qr, [0, -np.pi / 4, 0, -3 * np.pi / 4, 0, np.pi / 2, np.pi / 4]],
-                         ids=["qr", "franka_home"])
+@pytest.mark.parametrize(
+    "q_start",
+    [
+        rtb.models.Panda().qr,
+        [0, -np.pi / 4, 0, -3 * np.pi / 4, 0, np.pi / 2, np.pi / 4],
+    ],
+    ids=["qr", "franka_home"],
+)
 def test_joints_never_jump_while_the_hand_moves(panda, q_start):
     # From the Franka home pose, ikine_LM's default damping went singular and it
     # restarted from random joint positions, so the elbow jumped mid-plan.
@@ -63,7 +74,9 @@ def test_joints_never_jump_while_the_hand_moves(panda, q_start):
 
 def test_plan_passes_the_minipc_checks(native, panda):
     _, _, q_traj, dt = plan(panda, panda.qr, SE3.Tx(-0.1))
-    code, message = native.validate_trajectory(np.array(q_traj), dt, panda.qr, native.Limits())
+    code, message = native.validate_trajectory(
+        np.array(q_traj), dt, panda.qr, native.Limits()
+    )
     assert ErrorCodes(code) == ErrorCodes.Success, message
 
 
@@ -76,7 +89,11 @@ def test_plan_from_the_robot_and_run_it(station, panda):
     with station.client() as robot:
         q_start = robot.get_current_joint_positions()
         # The miniPC's pose and the toolbox model agree, so either can be planned from.
-        np.testing.assert_allclose(robot.get_current_pose().A, panda.fkine(q_start).A, atol=1e-6)
+        np.testing.assert_allclose(
+            robot.get_current_pose().A, panda.fkine(q_start).A, atol=1e-6
+        )
         _, se3_target, q_traj, dt = plan(panda, q_start, SE3.Tz(-0.05))
         assert robot.run_joint_trajectory(q_traj, dt) == ErrorCodes.Success
-        np.testing.assert_allclose(robot.get_current_pose().t, se3_target.t, atol=IK_ACCURACY + 1e-3)
+        np.testing.assert_allclose(
+            robot.get_current_pose().t, se3_target.t, atol=IK_ACCURACY + 1e-3
+        )

@@ -19,8 +19,8 @@ struct ValidationResult
 
 // Checks a joint trajectory (points dt seconds apart) against the limits.
 // q_current is the robot's measured position; nullptr skips the start check.
-ValidationResult validateTrajectory(
-    const std::vector<Vec7>& points, double dt, const Vec7* q_current, const Limits& limits);
+ValidationResult validateTrajectory(const std::vector<Vec7>& points, double dt, const Vec7* q_current,
+                                    const Limits& limits);
 
 // Plays a validated trajectory back at the control rate.
 //

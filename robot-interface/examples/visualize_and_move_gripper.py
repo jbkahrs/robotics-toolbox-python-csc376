@@ -1,13 +1,14 @@
-
 import roboticstoolbox as rtb
-from csc376_franky.visualizer import RtbVisualizer
+
 from csc376_franky import Gripper
+from csc376_franky.visualizer import RtbVisualizer
+
 
 def main():
     panda_rtb_model = rtb.models.Panda()
 
-    csc376_gripper = Gripper() # Through the robot server on this station's miniPC
-    q_start =  panda_rtb_model.qr # Random q start for visualizer
+    csc376_gripper = Gripper()  # Through the robot server on this station's miniPC
+    q_start = panda_rtb_model.qr  # Random q start for visualizer
     visualizer = RtbVisualizer(panda_rtb_model, q_start)
 
     input("Press enter, to move gripper in visualizer\n")
@@ -23,6 +24,7 @@ def main():
 
     return visualizer
 
+
 if __name__ == "__main__":
     visualizer = main()
-    visualizer.stop() # Makes sure render thread ends
+    visualizer.stop()  # Makes sure render thread ends

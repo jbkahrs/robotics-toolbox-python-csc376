@@ -6,8 +6,13 @@ import socket
 import numpy as np
 import pytest
 
-from csc376_franky import ErrorCodes, FrankaJointTrajectoryController, Gripper, RobotError, protocol
-
+from csc376_franky import (
+    ErrorCodes,
+    FrankaJointTrajectoryController,
+    Gripper,
+    RobotError,
+    protocol,
+)
 from helpers import linear_trajectory, make_station, wait_until
 
 
@@ -33,7 +38,9 @@ class RawClient:
         self.file = self.sock.makefile("rb")
 
     def send(self, message):
-        self.sock.sendall(protocol.encode(message) if isinstance(message, dict) else message)
+        self.sock.sendall(
+            protocol.encode(message) if isinstance(message, dict) else message
+        )
 
     def reply(self, request_id=None):
         while True:
@@ -52,16 +59,27 @@ class RawClient:
 
 
 def hello(raw):
-    raw.send({"op": "hello", "id": 1, "protocol": protocol.PROTOCOL_VERSION, "client": {"host": "raw"}})
+    raw.send(
+        {
+            "op": "hello",
+            "id": 1,
+            "protocol": protocol.PROTOCOL_VERSION,
+            "client": {"host": "raw"},
+        }
+    )
     assert raw.reply(1)["ok"]
 
 
 def test_both_clients_see_the_robot(station):
     with station.client() as a, station.client() as b:
         assert a.server_info["backend"] == "sim" and a.session != b.session
-        np.testing.assert_allclose(a.get_current_joint_positions(), b.get_current_joint_positions(), atol=1e-9)
+        np.testing.assert_allclose(
+            a.get_current_joint_positions(), b.get_current_joint_positions(), atol=1e-9
+        )
         state = a.get_current_robot_state()
-        assert len(state.q) == 7 and state.robot_mode == "idle" and len(state.O_T_EE) == 16
+        assert (
+            len(state.q) == 7 and state.robot_mode == "idle" and len(state.O_T_EE) == 16
+        )
         assert a.gripper.state.max_width == pytest.approx(0.08)
 
 
@@ -73,7 +91,9 @@ def test_execute_from_the_current_position(station):
         robot.set_trajectory_callback(seen.append)
         assert robot.run_joint_trajectory(trajectory, 0.01) == ErrorCodes.Success
         assert seen == list(range(len(trajectory)))
-        np.testing.assert_allclose(robot.get_current_joint_positions(), trajectory[-1], atol=2e-3)
+        np.testing.assert_allclose(
+            robot.get_current_joint_positions(), trajectory[-1], atol=2e-3
+        )
 
 
 def test_one_trajectory_at_a_time_across_the_station(station):
@@ -87,10 +107,20 @@ def test_one_trajectory_at_a_time_across_the_station(station):
         assert "127.0.0.1" in message
         assert running.result(10) == ErrorCodes.Success
         # b planned from where the robot was before a moved it.
-        message = raises(ErrorCodes.JointTrajectoryDoesNotStartAtCurrentPosition, b.run_joint_trajectory, plan_b, 0.01)
+        message = raises(
+            ErrorCodes.JointTrajectoryDoesNotStartAtCurrentPosition,
+            b.run_joint_trajectory,
+            plan_b,
+            0.01,
+        )
         assert "Plan again" in message
         q1 = b.get_current_joint_positions()
-        assert b.run_joint_trajectory(linear_trajectory(q1, [-0.2, 0, 0, 0, 0, 0, 0], 2.0), 0.01) == ErrorCodes.Success
+        assert (
+            b.run_joint_trajectory(
+                linear_trajectory(q1, [-0.2, 0, 0, 0, 0, 0, 0], 2.0), 0.01
+            )
+            == ErrorCodes.Success
+        )
 
 
 def test_any_client_can_stop_the_robot(station):
@@ -102,7 +132,10 @@ def test_any_client_can_stop_the_robot(station):
         b.stop()
         with pytest.raises(RobotError) as error:
             running.result(10)
-        assert error.value.code == ErrorCodes.Interrupted and "stop() from" in error.value.message
+        assert (
+            error.value.code == ErrorCodes.Interrupted
+            and "stop() from" in error.value.message
+        )
         assert a.get_current_joint_positions()[0] < trajectory[-1][0] - 0.1
 
 
@@ -150,14 +183,22 @@ def test_server_shutdown_stops_the_robot_and_says_so(native):
 
 def test_stop_after_the_last_point_is_not_an_interruption(native):
     limits = native.Limits()
-    limits.settle_velocity = 0.0  # the robot never counts as at rest, so every trajectory settles for
-    limits.settle_timeout = 4.0   # this long (1 s here, at the simulation's speed)
+    limits.settle_velocity = (
+        0.0  # the robot never counts as at rest, so every trajectory settles for
+    )
+    limits.settle_timeout = 4.0  # this long (1 s here, at the simulation's speed)
     station, close = make_station(native, limits)
     try:
         with station.client() as robot:
             q0 = robot.get_current_joint_positions()
-            running = in_background(robot.run_joint_trajectory, linear_trajectory(q0, [0.05, 0, 0, 0, 0, 0, 0], 0.5), 0.01)
-            assert wait_until(lambda: (robot.get_status()["trajectory"] or {}).get("settling"))
+            running = in_background(
+                robot.run_joint_trajectory,
+                linear_trajectory(q0, [0.05, 0, 0, 0, 0, 0, 0], 0.5),
+                0.01,
+            )
+            assert wait_until(
+                lambda: (robot.get_status()["trajectory"] or {}).get("settling")
+            )
             assert robot.stop() is False
             assert running.result(10) == ErrorCodes.Success
     finally:
@@ -169,14 +210,22 @@ def test_move_home(station):
         moving = in_background(a.move_home, 0.1)
         assert wait_until(lambda: b.is_executing)
         trajectory = np.repeat([b.get_current_joint_positions()], 2, axis=0)
-        assert "executing a trajectory for" in raises(ErrorCodes.RobotBusy, b.run_joint_trajectory, trajectory, 0.01)
+        assert "executing a trajectory for" in raises(
+            ErrorCodes.RobotBusy, b.run_joint_trajectory, trajectory, 0.01
+        )
         assert "executing a trajectory for" in raises(ErrorCodes.RobotBusy, b.move_home)
         assert moving.result(10) == ErrorCodes.Success
-        np.testing.assert_allclose(a.get_current_joint_positions(), protocol.HOME_JOINT_POSITIONS, atol=1e-4)
-        assert "at most 0.3" in raises(ErrorCodes.JointVelocitiesAboveMaximumAllowed, a.move_home, 0.5)
+        np.testing.assert_allclose(
+            a.get_current_joint_positions(), protocol.HOME_JOINT_POSITIONS, atol=1e-4
+        )
+        assert "at most 0.3" in raises(
+            ErrorCodes.JointVelocitiesAboveMaximumAllowed, a.move_home, 0.5
+        )
 
-        station.controller.sim_set_joint_positions(station.server.controller.snapshot()["state"]["q"] +
-                                                   np.array([0.3, 0, 0, 0, 0, 0, 0]))
+        station.controller.sim_set_joint_positions(
+            station.server.controller.snapshot()["state"]["q"]
+            + np.array([0.3, 0, 0, 0, 0, 0, 0])
+        )
         moving = in_background(a.move_home, 0.1)
         assert wait_until(lambda: b.is_executing)
         assert b.stop() is True
@@ -215,12 +264,18 @@ def test_gripper(station):
 def test_gripper_is_shared_one_command_at_a_time(station):
     with station.client() as a, station.client() as b:
         a.gripper.move(0.0, 0.1)
-        moving = a.gripper.move_async(0.08, 0.02)  # 4 s at the gripper's speed, 1 s simulated here
+        moving = a.gripper.move_async(
+            0.08, 0.02
+        )  # 4 s at the gripper's speed, 1 s simulated here
         assert wait_until(lambda: a.gripper.state.width > 0.005)
-        assert "gripper is busy" in raises(ErrorCodes.RobotBusy, b.gripper.move, 0.02, 0.1)
+        assert "gripper is busy" in raises(
+            ErrorCodes.RobotBusy, b.gripper.move, 0.02, 0.1
+        )
         q0 = b.get_current_joint_positions()
         trajectory = linear_trajectory(q0, [0.1, 0, 0, 0, 0, 0, 0], duration=1.0)
-        assert "gripper is moving" in raises(ErrorCodes.RobotBusy, b.run_joint_trajectory, trajectory, 0.01)
+        assert "gripper is moving" in raises(
+            ErrorCodes.RobotBusy, b.run_joint_trajectory, trajectory, 0.01
+        )
         assert b.gripper.stop()  # stop works for anyone
         assert moving.result(5) is False
 
@@ -228,34 +283,54 @@ def test_gripper_is_shared_one_command_at_a_time(station):
 def test_robot_not_ready(station):
     with station.client() as robot:
         station.controller.sim_set_robot_mode("user_stopped")
-        assert wait_until(lambda: robot.get_current_robot_state().robot_mode == "user_stopped")
+        assert wait_until(
+            lambda: robot.get_current_robot_state().robot_mode == "user_stopped"
+        )
         q0 = robot.get_current_joint_positions()
-        message = raises(ErrorCodes.RobotNotReady, robot.run_joint_trajectory,
-                         linear_trajectory(q0, [0.1, 0, 0, 0, 0, 0, 0], 1.0), 0.01)
+        message = raises(
+            ErrorCodes.RobotNotReady,
+            robot.run_joint_trajectory,
+            linear_trajectory(q0, [0.1, 0, 0, 0, 0, 0, 0], 1.0),
+            0.01,
+        )
         assert "user stop" in message
 
 
 def test_recover_after_a_reflex(station):
     with station.client() as robot:
         q0 = robot.get_current_joint_positions()
-        running = in_background(robot.run_joint_trajectory, linear_trajectory(q0, [0.3, 0, 0, 0, 0, 0, 0], 4.0), 0.01)
+        running = in_background(
+            robot.run_joint_trajectory,
+            linear_trajectory(q0, [0.3, 0, 0, 0, 0, 0, 0], 4.0),
+            0.01,
+        )
         assert wait_until(lambda: robot.is_executing)
         station.controller.sim_inject_reflex()
         with pytest.raises(RobotError) as error:
             running.result(10)
         assert error.value.code == ErrorCodes.ControlException
-        assert wait_until(lambda: "cartesian_reflex" in robot.get_current_robot_state().current_errors)
+        assert wait_until(
+            lambda: "cartesian_reflex" in robot.get_current_robot_state().current_errors
+        )
         robot.recover()
         q1 = robot.get_current_joint_positions()
-        assert robot.run_joint_trajectory(linear_trajectory(q1, [-0.1, 0, 0, 0, 0, 0, 0], 1.0), 0.01) == \
-            ErrorCodes.Success
+        assert (
+            robot.run_joint_trajectory(
+                linear_trajectory(q1, [-0.1, 0, 0, 0, 0, 0, 0], 1.0), 0.01
+            )
+            == ErrorCodes.Success
+        )
 
 
 def test_pose_matches_the_reported_matrix(station):
     pytest.importorskip("spatialmath")
     with station.client() as robot:
         state = robot.get_current_robot_state()
-        np.testing.assert_allclose(robot.get_current_pose().A, np.array(state.O_T_EE).reshape(4, 4).T, atol=1e-9)
+        np.testing.assert_allclose(
+            robot.get_current_pose().A,
+            np.array(state.O_T_EE).reshape(4, 4).T,
+            atol=1e-9,
+        )
 
 
 def test_robot_is_released_after_the_last_client_leaves(station):
@@ -266,9 +341,24 @@ def test_robot_is_released_after_the_last_client_leaves(station):
 
 def test_client_side_checks(station):
     with station.client() as robot:
-        raises(ErrorCodes.JointSizeNotSeven, robot.run_joint_trajectory, np.zeros((10, 6)), 0.01)
-        raises(ErrorCodes.JointSizeNotSeven, robot.run_joint_trajectory, [[0.0] * 7, [0.0] * 6], 0.01)
-        raises(ErrorCodes.NonFiniteValue, robot.run_joint_trajectory, np.full((3, 7), np.nan), 0.01)
+        raises(
+            ErrorCodes.JointSizeNotSeven,
+            robot.run_joint_trajectory,
+            np.zeros((10, 6)),
+            0.01,
+        )
+        raises(
+            ErrorCodes.JointSizeNotSeven,
+            robot.run_joint_trajectory,
+            [[0.0] * 7, [0.0] * 6],
+            0.01,
+        )
+        raises(
+            ErrorCodes.NonFiniteValue,
+            robot.run_joint_trajectory,
+            np.full((3, 7), np.nan),
+            0.01,
+        )
 
 
 def test_protocol_errors(station):
@@ -289,15 +379,27 @@ def test_protocol_errors(station):
     raw.close()
 
 
-@pytest.mark.parametrize("fields", [{}, {"trajectory": None}, {"trajectory": 3.0}, {"trajectory": [0.0] * 7},
-                                    {"trajectory": "up"}, {"trajectory": [[[0.0] * 7] * 2]}],
-                         ids=["missing", "null", "number", "one point", "text", "nested"])
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {},
+        {"trajectory": None},
+        {"trajectory": 3.0},
+        {"trajectory": [0.0] * 7},
+        {"trajectory": "up"},
+        {"trajectory": [[[0.0] * 7] * 2]},
+    ],
+    ids=["missing", "null", "number", "one point", "text", "nested"],
+)
 def test_malformed_trajectories_are_refused(station, fields):
     raw = RawClient(station.port)
     hello(raw)
     raw.send({"op": "execute", "id": 2, "dt": 0.01, **fields})
     reply = raw.reply(2)
-    assert reply["error"]["code"] == ErrorCodes.JointSizeNotSeven and "7 numbers" in reply["error"]["message"]
+    assert (
+        reply["error"]["code"] == ErrorCodes.JointSizeNotSeven
+        and "7 numbers" in reply["error"]["message"]
+    )
     raw.close()
 
 
@@ -305,14 +407,22 @@ def test_no_server(native):
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
-    message = raises(ErrorCodes.ServerUnavailable, FrankaJointTrajectoryController, "127.0.0.1", port, timeout=1.0)
+    message = raises(
+        ErrorCodes.ServerUnavailable,
+        FrankaJointTrajectoryController,
+        "127.0.0.1",
+        port,
+        timeout=1.0,
+    )
     assert "Cannot reach the robot server" in message
 
 
 def test_robot_not_reachable_from_the_minipc(native):
     station, close = make_station(native)
     try:
-        station.controller.sim_refuse_connections("libfranka: Connection refused (simulated)")
+        station.controller.sim_refuse_connections(
+            "libfranka: Connection refused (simulated)"
+        )
         message = raises(ErrorCodes.RobotNotConnected, station.client, timeout=1.0)
         assert "FCI" in message
     finally:
@@ -327,7 +437,9 @@ def test_separate_gripper_connection(station):
 def test_server_without_a_gripper(native):
     station, close = make_station(native, gripper=False)
     try:
-        message = raises(ErrorCodes.GripperNotConnected, Gripper, "127.0.0.1", station.port)
+        message = raises(
+            ErrorCodes.GripperNotConnected, Gripper, "127.0.0.1", station.port
+        )
         assert "without a gripper" in message
         with station.client() as robot:
             assert robot.gripper is None

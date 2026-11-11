@@ -43,7 +43,15 @@ MAX_MESSAGE_BYTES = 32 * 1024 * 1024
 HEARTBEAT_INTERVAL = 0.5
 
 # The home pose of libfranka's examples, where move_home goes.
-HOME_JOINT_POSITIONS = (0.0, -math.pi / 4, 0.0, -3 * math.pi / 4, 0.0, math.pi / 2, math.pi / 4)
+HOME_JOINT_POSITIONS = (
+    0.0,
+    -math.pi / 4,
+    0.0,
+    -3 * math.pi / 4,
+    0.0,
+    math.pi / 2,
+    math.pi / 4,
+)
 
 
 class ErrorCodes(enum.IntEnum):

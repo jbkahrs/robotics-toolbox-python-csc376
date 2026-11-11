@@ -40,7 +40,8 @@ JointMotionGenerator::JointMotionGenerator(const Vec7& q_start, const Vec7& q_go
         const double dq_max = kDqMax[i] * speed_factor;
         double dq_max_reach = dq_max;
         if (std::abs(delta_q_[i]) < 0.75 * (dq_max * dq_max / ddq_start) + 0.75 * (dq_max * dq_max / ddq_goal))
-            dq_max_reach = std::sqrt(4.0 / 3.0 * std::abs(delta_q_[i]) * (ddq_start * ddq_goal) / (ddq_start + ddq_goal));
+            dq_max_reach =
+                std::sqrt(4.0 / 3.0 * std::abs(delta_q_[i]) * (ddq_start * ddq_goal) / (ddq_start + ddq_goal));
         const double t_1 = 1.5 * dq_max_reach / ddq_start;
         const double delta_t_2 = 1.5 * dq_max_reach / ddq_goal;
         t_f[i] = t_1 / 2.0 + delta_t_2 / 2.0 + std::abs(delta_q_[i]) / dq_max_reach;
@@ -80,8 +81,8 @@ bool JointMotionGenerator::positions(double t, Vec7& q_d) const
         }
         else if (t < t_1_sync_[i])
         {
-            delta_q_d = -1.0 / std::pow(t_1_sync_[i], 3.0) * dq_max_sync_[i] * s * (0.5 * t - t_1_sync_[i]) *
-                        std::pow(t, 3.0);
+            delta_q_d =
+                -1.0 / std::pow(t_1_sync_[i], 3.0) * dq_max_sync_[i] * s * (0.5 * t - t_1_sync_[i]) * std::pow(t, 3.0);
             finished = false;
         }
         else if (t < t_2_sync_[i])
@@ -93,8 +94,7 @@ bool JointMotionGenerator::positions(double t, Vec7& q_d) const
         {
             delta_q_d = delta_q_[i] +
                         0.5 *
-                            (1.0 / std::pow(delta_t_2_sync, 3.0) *
-                                 (t - t_1_sync_[i] - 2.0 * delta_t_2_sync - t_d) *
+                            (1.0 / std::pow(delta_t_2_sync, 3.0) * (t - t_1_sync_[i] - 2.0 * delta_t_2_sync - t_d) *
                                  std::pow(t - t_1_sync_[i] - t_d, 3.0) +
                              (2.0 * t - 2.0 * t_1_sync_[i] - delta_t_2_sync - 2.0 * t_d)) *
                             dq_max_sync_[i] * s;

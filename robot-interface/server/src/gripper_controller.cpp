@@ -65,7 +65,8 @@ GripperController::Result GripperController::command(F&& f)
     }
     catch (const BackendNetworkError& e)
     {
-        result = Result{ErrorCodes::GripperNotConnected, false, std::string("Connection to the gripper lost: ") + e.what()};
+        result =
+            Result{ErrorCodes::GripperNotConnected, false, std::string("Connection to the gripper lost: ") + e.what()};
         connectionLost(e.what());
     }
     catch (const std::exception& e)
@@ -86,8 +87,8 @@ GripperController::Result GripperController::move(double width, double speed)
     return command([&] { return backend_->move(width, speed); });
 }
 
-GripperController::Result GripperController::grasp(
-    double width, double speed, double force, double epsilon_inner, double epsilon_outer)
+GripperController::Result GripperController::grasp(double width, double speed, double force, double epsilon_inner,
+                                                   double epsilon_outer)
 {
     return command([&] { return backend_->grasp(width, speed, force, epsilon_inner, epsilon_outer); });
 }
@@ -106,7 +107,8 @@ GripperController::Result GripperController::stop()
     catch (const BackendNetworkError& e)
     {
         connectionLost(e.what());
-        return Result{ErrorCodes::GripperNotConnected, false, std::string("Connection to the gripper lost: ") + e.what()};
+        return Result{ErrorCodes::GripperNotConnected, false,
+                      std::string("Connection to the gripper lost: ") + e.what()};
     }
     catch (const std::exception& e)
     {

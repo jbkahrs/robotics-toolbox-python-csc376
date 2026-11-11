@@ -29,21 +29,15 @@ const char* notReadyReason(int mode)
 {
     switch (static_cast<RobotMode>(mode))
     {
-    case RobotMode::Idle:
-        return nullptr;
+    case RobotMode::Idle: return nullptr;
     case RobotMode::Reflex:
         return "The robot stopped after a reflex (for example a collision) and needs an error recovery: call "
                "recover().";
-    case RobotMode::UserStopped:
-        return "The user stop is pressed. Release it, then try again.";
-    case RobotMode::Guiding:
-        return "The robot is being guided by hand. Let go of the guiding buttons, then try again.";
-    case RobotMode::AutomaticErrorRecovery:
-        return "The robot is recovering from an error; try again in a moment.";
-    case RobotMode::Move:
-        return "The robot is moving.";
-    case RobotMode::Other:
-        break;
+    case RobotMode::UserStopped: return "The user stop is pressed. Release it, then try again.";
+    case RobotMode::Guiding: return "The robot is being guided by hand. Let go of the guiding buttons, then try again.";
+    case RobotMode::AutomaticErrorRecovery: return "The robot is recovering from an error; try again in a moment.";
+    case RobotMode::Move: return "The robot is moving.";
+    case RobotMode::Other: break;
     }
     return "The robot is not ready to move: open the brakes and activate FCI in Desk.";
 }

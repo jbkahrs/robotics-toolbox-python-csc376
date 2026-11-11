@@ -10,7 +10,7 @@
 #include "csc376_franky/sim_backend.hpp"
 
 namespace py = pybind11;
-using namespace pybind11::literals;  // to bring in the '_a' literal
+using namespace pybind11::literals; // to bring in the '_a' literal
 using namespace csc376_franky;
 
 namespace
@@ -211,8 +211,7 @@ PYBIND11_MODULE(_control, m)
             std::string message;
             if (!toPoints(trajectory, points, message))
                 return py::make_tuple(static_cast<int>(ErrorCodes::JointSizeNotSeven), message);
-            const ValidationResult result =
-                validateTrajectory(points, dt, q_current ? &*q_current : nullptr, limits);
+            const ValidationResult result = validateTrajectory(points, dt, q_current ? &*q_current : nullptr, limits);
             return py::make_tuple(static_cast<int>(result.code), result.message);
         },
         "trajectory"_a, "dt"_a, "q_current"_a = py::none(), "limits"_a = Limits(),
@@ -335,17 +334,20 @@ PYBIND11_MODULE(_control, m)
              })
         .def("shutdown", &Controller::shutdown, py::call_guard<py::gil_scoped_release>())
         // Fault injection, simulated robot only.
-        .def("sim_set_joint_positions", [](Controller& c, const Vec7& q) { simBackend(c).setJointPositions(q); },
-             "q"_a)
-        .def("sim_set_robot_mode",
-             [](Controller& c, const std::string& mode) { simBackend(c).setRobotMode(modeFromName(mode)); }, "mode"_a)
+        .def(
+            "sim_set_joint_positions", [](Controller& c, const Vec7& q) { simBackend(c).setJointPositions(q); }, "q"_a)
+        .def(
+            "sim_set_robot_mode",
+            [](Controller& c, const std::string& mode) { simBackend(c).setRobotMode(modeFromName(mode)); }, "mode"_a)
         .def("sim_inject_reflex", [](Controller& c) { simBackend(c).injectReflex(); })
-        .def("sim_inject_disturbance",
-             [](Controller& c, int joint, double offset) { simBackend(c).injectDisturbance(joint, offset); },
-             "joint"_a, "offset"_a)
+        .def(
+            "sim_inject_disturbance",
+            [](Controller& c, int joint, double offset) { simBackend(c).injectDisturbance(joint, offset); }, "joint"_a,
+            "offset"_a)
         .def("sim_drop_connection", [](Controller& c) { simBackend(c).dropConnection(); })
-        .def("sim_refuse_connections",
-             [](Controller& c, const std::string& reason) { simBackend(c).refuseConnections(reason); }, "reason"_a);
+        .def(
+            "sim_refuse_connections",
+            [](Controller& c, const std::string& reason) { simBackend(c).refuseConnections(reason); }, "reason"_a);
 
     py::class_<GripperController>(m, "GripperController")
         .def_static(
@@ -435,8 +437,9 @@ PYBIND11_MODULE(_control, m)
                  return d;
              })
         .def("shutdown", &GripperController::shutdown, py::call_guard<py::gil_scoped_release>())
-        .def("sim_set_object_width",
-             [](GripperController& g, double width) { simGripperBackend(g).setObjectWidth(width); }, "width"_a);
+        .def(
+            "sim_set_object_width",
+            [](GripperController& g, double width) { simGripperBackend(g).setObjectWidth(width); }, "width"_a);
 
 #ifdef CSC376_HAVE_LIBFRANKA
     m.attr("HAS_LIBFRANKA") = true;

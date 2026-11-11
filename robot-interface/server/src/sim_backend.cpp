@@ -15,7 +15,7 @@ constexpr double kCycle = 0.001;
 // Bandwidth of the simulated joint tracking [rad/s].
 constexpr double kOmega = 40.0;
 
-using Mat4 = std::array<double, 16>;  // column-major, like franka::RobotState::O_T_EE
+using Mat4 = std::array<double, 16>; // column-major, like franka::RobotState::O_T_EE
 
 Mat4 multiply(const Mat4& a, const Mat4& b)
 {
@@ -32,10 +32,7 @@ Mat4 dh(double a, double d, double alpha, double theta)
 {
     const double ca = std::cos(alpha), sa = std::sin(alpha);
     const double ct = std::cos(theta), st = std::sin(theta);
-    return {ct, st * ca, st * sa, 0.0,
-            -st, ct * ca, ct * sa, 0.0,
-            0.0, -sa, ca, 0.0,
-            a, -d * sa, d * ca, 1.0};
+    return {ct, st * ca, st * sa, 0.0, -st, ct * ca, ct * sa, 0.0, 0.0, -sa, ca, 0.0, a, -d * sa, d * ca, 1.0};
 }
 
 // Base to Franka Hand TCP: the Panda's kinematics from Franka's documentation,
@@ -61,9 +58,7 @@ std::chrono::steady_clock::duration cycleDuration(double speed)
 
 } // namespace
 
-SimBackend::SimBackend(const Vec7& q_start, double speed) : speed_(speed > 0.0 ? speed : 1.0), q_(q_start)
-{
-}
+SimBackend::SimBackend(const Vec7& q_start, double speed) : speed_(speed > 0.0 ? speed : 1.0), q_(q_start) {}
 
 void SimBackend::connect()
 {
@@ -187,8 +182,8 @@ void SimBackend::run(const ControlCallback& callback, bool joint_positions)
                         q_[j] = command.q_d[j];
                         continue;
                     }
-                    const double ddq = kOmega * kOmega * (command.q_d[j] - q_[j]) +
-                                       2.0 * kOmega * (command.dq_d[j] - dq_[j]);
+                    const double ddq =
+                        kOmega * kOmega * (command.q_d[j] - q_[j]) + 2.0 * kOmega * (command.dq_d[j] - dq_[j]);
                     dq_[j] += ddq * kCycle;
                     q_[j] += dq_[j] * kCycle;
                 }

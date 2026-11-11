@@ -38,7 +38,7 @@ def make_station(native, limits=None, gripper=True, **server_options):
 
     controller = native.Controller.sim(limits or native.Limits(), speed=SIM_SPEED)
     gripper = native.GripperController.sim(speed=SIM_SPEED) if gripper else None
-    options = dict(idle_release=0.5, owner_timeout=0.5)
+    options = {"idle_release": 0.5, "owner_timeout": 0.5}
     options.update(server_options)
     server = RobotServer(controller, gripper, **options)
     loop = asyncio.new_event_loop()
@@ -75,6 +75,6 @@ def wait_until(predicate, timeout=10.0, period=0.01):
 def linear_trajectory(q_start, offset, duration, dt=0.01):
     """A joint trajectory from q_start to q_start + offset, at rest at both ends."""
     q_start = np.asarray(q_start, dtype=float)
-    s = np.linspace(0.0, 1.0, int(round(duration / dt)) + 1)
+    s = np.linspace(0.0, 1.0, round(duration / dt) + 1)
     s = s * s * (3.0 - 2.0 * s)
     return q_start + np.outer(s, offset)

@@ -131,19 +131,21 @@ public:
         {
             // limit_rate and the cutoff frequency are libfranka 0.9's defaults,
             // spelled out because later versions default to neither.
-            robot_->control([&](const franka::RobotState& state, franka::Duration period) -> franka::Torques {
-                storeErrors(state);
-                const Command command = callback(toMeasured(state), period.toSec());
-                const std::array<double, 7> coriolis = model_->coriolis(state);
-                std::array<double, 7> tau{};
-                for (int i = 0; i < kDof; ++i)
-                {
-                    tau[i] = stiffness_[i] * (command.q_d[i] - state.q[i]) +
-                             damping_[i] * (command.dq_d[i] - state.dq[i]) + coriolis[i];
-                }
-                const franka::Torques torques(franka::limitRate(franka::kMaxTorqueRate, tau, state.tau_J_d));
-                return command.finished ? franka::MotionFinished(torques) : torques;
-            }, true, franka::kDefaultCutoffFrequency);
+            robot_->control(
+                [&](const franka::RobotState& state, franka::Duration period) -> franka::Torques {
+                    storeErrors(state);
+                    const Command command = callback(toMeasured(state), period.toSec());
+                    const std::array<double, 7> coriolis = model_->coriolis(state);
+                    std::array<double, 7> tau{};
+                    for (int i = 0; i < kDof; ++i)
+                    {
+                        tau[i] = stiffness_[i] * (command.q_d[i] - state.q[i]) +
+                                 damping_[i] * (command.dq_d[i] - state.dq[i]) + coriolis[i];
+                    }
+                    const franka::Torques torques(franka::limitRate(franka::kMaxTorqueRate, tau, state.tau_J_d));
+                    return command.finished ? franka::MotionFinished(torques) : torques;
+                },
+                true, franka::kDefaultCutoffFrequency);
         }
         catch (const TrajectoryAbort&)
         {
@@ -166,12 +168,14 @@ public:
         configure();
         try
         {
-            robot_->control([&](const franka::RobotState& state, franka::Duration period) -> franka::JointPositions {
-                storeErrors(state);
-                const Command command = callback(toMeasured(state), period.toSec());
-                const franka::JointPositions positions(command.q_d);
-                return command.finished ? franka::MotionFinished(positions) : positions;
-            }, franka::ControllerMode::kJointImpedance, true, franka::kDefaultCutoffFrequency);
+            robot_->control(
+                [&](const franka::RobotState& state, franka::Duration period) -> franka::JointPositions {
+                    storeErrors(state);
+                    const Command command = callback(toMeasured(state), period.toSec());
+                    const franka::JointPositions positions(command.q_d);
+                    return command.finished ? franka::MotionFinished(positions) : positions;
+                },
+                franka::ControllerMode::kJointImpedance, true, franka::kDefaultCutoffFrequency);
         }
         catch (const TrajectoryAbort&)
         {
@@ -228,6 +232,7 @@ private:
         try
         {
             // The old controller's collision thresholds [Nm], [N].
+            // clang-format off
             robot_->setCollisionBehavior(
                 {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}},
                 {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}},
@@ -237,6 +242,7 @@ private:
                 {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}},
                 {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}},
                 {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}});
+            // clang-format on
             // The robot's own joint impedance, for controlJointPositions (libfranka's
             // setDefaultBehavior); the torque loop in control() does not use it.
             robot_->setJointImpedance({{3000, 3000, 3000, 2500, 2500, 2000, 2000}});

@@ -42,3 +42,16 @@ include = ["/csc376_franky", "/examples", "/tests", "/README.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# Lint and format like the toolbox, with this folder's packages as first-party.
+[tool.ruff]
+extend = "../pyproject.toml"
+
+[tool.ruff.lint]
+# Deliberate: errors are passed on to a future, or reported without ending the
+# render thread; and protocol.decode documents ValueError.
+extend-ignore = ["BLE001", "TRY004"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["csc376_franky", "csc376_franky_server", "helpers"]
+known-third-party = ["roboticstoolbox"]

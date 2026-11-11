@@ -33,8 +33,8 @@ ValidationResult fail(ErrorCodes code, std::string message)
 
 } // namespace
 
-ValidationResult validateTrajectory(
-    const std::vector<Vec7>& points, double dt, const Vec7* q_current, const Limits& limits)
+ValidationResult validateTrajectory(const std::vector<Vec7>& points, double dt, const Vec7* q_current,
+                                    const Limits& limits)
 {
     if (!std::isfinite(dt))
         return fail(ErrorCodes::NonFiniteValue, "dt must be a finite number");
@@ -49,9 +49,8 @@ ValidationResult validateTrajectory(
     if (points.size() < 2)
         return fail(ErrorCodes::TrajectorySizeLessThanTwo, "Trajectory must have at least 2 points");
     if (points.size() > limits.max_points)
-        return fail(ErrorCodes::TrajectoryTooLong,
-                    "Trajectory has " + std::to_string(points.size()) + " points; the maximum is " +
-                        std::to_string(limits.max_points));
+        return fail(ErrorCodes::TrajectoryTooLong, "Trajectory has " + std::to_string(points.size()) +
+                                                       " points; the maximum is " + std::to_string(limits.max_points));
     const double duration = dt * static_cast<double>(points.size() - 1);
     if (duration > limits.max_duration)
         return fail(ErrorCodes::TrajectoryTooLong,

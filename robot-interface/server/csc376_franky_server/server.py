@@ -21,6 +21,7 @@ import uuid
 from dataclasses import dataclass, field
 
 import numpy as np
+
 from csc376_franky import protocol
 from csc376_franky.protocol import ErrorCodes
 
@@ -74,22 +75,40 @@ def _configure_socket(sock):
     sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
     # Notice a client that vanished (power cut, cable pulled) within about 10 s.
-    for option, value in (("TCP_KEEPIDLE", 4), ("TCP_KEEPINTVL", 2), ("TCP_KEEPCNT", 3)):
+    for option, value in (
+        ("TCP_KEEPIDLE", 4),
+        ("TCP_KEEPINTVL", 2),
+        ("TCP_KEEPCNT", 3),
+    ):
         if hasattr(socket, option):
             sock.setsockopt(socket.IPPROTO_TCP, getattr(socket, option), value)
 
 
 def _number(message, name, default=None, minimum=None):
     value = message.get(name, default)
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not np.isfinite(value):
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not np.isfinite(value)
+    ):
         raise RequestError(ErrorCodes.InvalidRequest, f"{name} must be a finite number")
     if minimum is not None and value < minimum:
-        raise RequestError(ErrorCodes.InvalidRequest, f"{name} must be at least {minimum}")
+        raise RequestError(
+            ErrorCodes.InvalidRequest, f"{name} must be at least {minimum}"
+        )
     return float(value)
 
 
 class RobotServer:
-    def __init__(self, controller, gripper=None, *, state_rate=50.0, idle_release=30.0, owner_timeout=2.0):
+    def __init__(
+        self,
+        controller,
+        gripper=None,
+        *,
+        state_rate=50.0,
+        idle_release=30.0,
+        owner_timeout=2.0,
+    ):
         self.controller = controller
         self.gripper = gripper
         self.state_rate = min(float(state_rate), MAX_STATE_RATE)
@@ -111,7 +130,9 @@ class RobotServer:
         self._closed = False
 
     async def start(self, host, port):
-        self._server = await asyncio.start_server(self._handle, host, port, limit=protocol.MAX_MESSAGE_BYTES)
+        self._server = await asyncio.start_server(
+            self._handle, host, port, limit=protocol.MAX_MESSAGE_BYTES
+        )
         self._monitor_task = asyncio.create_task(self._monitor())
         return self._server
 
@@ -135,8 +156,10 @@ class RobotServer:
         self.controller.stop()
         if executions and self._monitor_task is not None:
             limits = self.controller.limits
-            await asyncio.wait([execution.task for execution in executions],
-                               timeout=limits.stop_time + limits.settle_timeout + 1.0)
+            await asyncio.wait(
+                [execution.task for execution in executions],
+                timeout=limits.stop_time + limits.settle_timeout + 1.0,
+            )
         for session in list(self._sessions.values()):
             session.writer.close()
         if self._monitor_task is not None:
@@ -152,7 +175,12 @@ class RobotServer:
         sock = writer.get_extra_info("socket")
         if sock is not None:
             _configure_socket(sock)
-        session = Session(next(self._session_ids), peer[0] if peer else "?", writer, 1.0 / self.state_rate)
+        session = Session(
+            next(self._session_ids),
+            peer[0] if peer else "?",
+            writer,
+            1.0 / self.state_rate,
+        )
         self._sessions[session.id] = session
         log.info("session %d: connected from %s", session.id, session.peer)
         tasks = set()
@@ -161,9 +189,21 @@ class RobotServer:
                 try:
                     line = await reader.readline()
                 except ValueError:
-                    log.warning("session %d: message over %d bytes, closing", session.id, protocol.MAX_MESSAGE_BYTES)
-                    self._write(session, self._error_reply(None, RequestError(
-                        ErrorCodes.InvalidRequest, f"Message larger than {protocol.MAX_MESSAGE_BYTES} bytes")))
+                    log.warning(
+                        "session %d: message over %d bytes, closing",
+                        session.id,
+                        protocol.MAX_MESSAGE_BYTES,
+                    )
+                    self._write(
+                        session,
+                        self._error_reply(
+                            None,
+                            RequestError(
+                                ErrorCodes.InvalidRequest,
+                                f"Message larger than {protocol.MAX_MESSAGE_BYTES} bytes",
+                            ),
+                        ),
+                    )
                     break
                 except ConnectionError:
                     break
@@ -173,8 +213,16 @@ class RobotServer:
                 try:
                     message = protocol.decode(line)
                 except ValueError:
-                    self._write(session, self._error_reply(
-                        None, RequestError(ErrorCodes.InvalidRequest, "Each message must be one JSON object per line")))
+                    self._write(
+                        session,
+                        self._error_reply(
+                            None,
+                            RequestError(
+                                ErrorCodes.InvalidRequest,
+                                "Each message must be one JSON object per line",
+                            ),
+                        ),
+                    )
                     continue
                 task = asyncio.create_task(self._dispatch(session, message))
                 tasks.add(task)
@@ -198,7 +246,10 @@ class RobotServer:
         for execution in self._executions.values():
             if execution.session is session and not execution.stopped_by:
                 execution.stopped_by = f"because {session.label} disconnected"
-                log.warning("session %d: disconnected during its trajectory, stopping the robot", session.id)
+                log.warning(
+                    "session %d: disconnected during its trajectory, stopping the robot",
+                    session.id,
+                )
                 self.controller.stop()
 
     def _write(self, session, message):
@@ -207,8 +258,15 @@ class RobotServer:
 
     @staticmethod
     def _error_reply(request_id, error):
-        return {"id": request_id, "ok": False,
-                "error": {"code": int(error.code), "name": error.code.name, "message": error.message}}
+        return {
+            "id": request_id,
+            "ok": False,
+            "error": {
+                "code": int(error.code),
+                "name": error.code.name,
+                "message": error.message,
+            },
+        }
 
     async def _dispatch(self, session, message):
         request_id = message.get("id")
@@ -218,16 +276,25 @@ class RobotServer:
             if handler is None:
                 raise RequestError(ErrorCodes.InvalidRequest, f"Unknown request {op!r}")
             if not session.hello and op not in ("hello", "heartbeat"):
-                raise RequestError(ErrorCodes.InvalidRequest, "The first request must be hello")
+                raise RequestError(
+                    ErrorCodes.InvalidRequest, "The first request must be hello"
+                )
             result = await handler(session, message)
             reply = {"id": request_id, "ok": True, "result": result or {}}
         except RequestError as error:
             reply = self._error_reply(request_id, error)
         except Exception:
             reference = uuid.uuid4().hex[:8]
-            log.exception("session %d: %r request failed (ref %s)", session.id, op, reference)
-            reply = self._error_reply(request_id, RequestError(
-                ErrorCodes.InvalidRequest, f"The robot server could not handle the request (ref {reference})"))
+            log.exception(
+                "session %d: %r request failed (ref %s)", session.id, op, reference
+            )
+            reply = self._error_reply(
+                request_id,
+                RequestError(
+                    ErrorCodes.InvalidRequest,
+                    f"The robot server could not handle the request (ref {reference})",
+                ),
+            )
         if request_id is not None:
             self._write(session, reply)
             try:
@@ -243,7 +310,8 @@ class RobotServer:
             raise RequestError(
                 ErrorCodes.IncompatibleVersion,
                 f"This robot server speaks protocol {protocol.PROTOCOL_VERSION} but the client speaks {version}. "
-                "Use the csc376_franky version that matches the server (ask your TA).")
+                "Use the csc376_franky version that matches the server (ask your TA).",
+            )
         client = message.get("client")
         if isinstance(client, dict):
             session.host = str(client.get("host", "?"))[:64]
@@ -261,7 +329,9 @@ class RobotServer:
             "backend": self.controller.backend,
             "robot": self.controller.address,
             "gripper": self.gripper is not None,
-            "state_rate": 1.0 / session.state_period if session.state_period > 0 else 0.0,
+            "state_rate": 1.0 / session.state_period
+            if session.state_period > 0
+            else 0.0,
             "owner_timeout": self.owner_timeout,
             "limits": {
                 "start_tolerance": limits.start_tolerance,
@@ -295,21 +365,32 @@ class RobotServer:
         try:
             points = np.asarray(message.get("trajectory"), dtype=float)
         except (TypeError, ValueError):
-            raise RequestError(ErrorCodes.JointSizeNotSeven,
-                               "The trajectory must be a list of joint positions, each a list of 7 numbers") from None
+            raise RequestError(
+                ErrorCodes.JointSizeNotSeven,
+                "The trajectory must be a list of joint positions, each a list of 7 numbers",
+            ) from None
         if points.ndim != 2 or points.shape[1] != 7:
-            raise RequestError(ErrorCodes.JointSizeNotSeven,
-                               "The trajectory must be a list of joint positions, each a list of 7 numbers")
+            raise RequestError(
+                ErrorCodes.JointSizeNotSeven,
+                "The trajectory must be a list of joint positions, each a list of 7 numbers",
+            )
         self._require_gripper_idle(session)
-        execution = await self._run_motion(session, message, self.controller.execute(points, dt),
-                                           len(points), dt * (len(points) - 1))
+        execution = await self._run_motion(
+            session,
+            message,
+            self.controller.execute(points, dt),
+            len(points),
+            dt * (len(points) - 1),
+        )
         return {"points": execution.points, "duration": execution.duration}
 
     async def _op_move_home(self, session, message):
         """libfranka's examples' move to their home pose, with their MotionGenerator."""
         speed_factor = _number(message, "speed_factor")
         self._require_gripper_idle(session)
-        submission = self.controller.move_to_joint_positions(protocol.HOME_JOINT_POSITIONS, speed_factor)
+        submission = self.controller.move_to_joint_positions(
+            protocol.HOME_JOINT_POSITIONS, speed_factor
+        )
         await self._run_motion(session, message, submission, 2, 0.0, what="move home")
         return {}
 
@@ -322,8 +403,14 @@ class RobotServer:
         executions = [] if settling else list(self._executions.values())
         for execution in executions:
             if not execution.stopped_by:
-                execution.stopped_by = "by stop()" if execution.session is session else f"by stop() from {session.label}"
-            log.info("session %d: stop requested by %s", execution.session.id, session.label)
+                execution.stopped_by = (
+                    "by stop()"
+                    if execution.session is session
+                    else f"by stop() from {session.label}"
+                )
+            log.info(
+                "session %d: stop requested by %s", execution.session.id, session.label
+            )
         self.controller.stop()
         return {"was_executing": bool(executions)}
 
@@ -331,10 +418,15 @@ class RobotServer:
         code, text, controller_id = self.controller.recover()
         code = ErrorCodes(code)
         if code != ErrorCodes.Success:
-            raise RequestError(code, self._busy_message(session) if code == ErrorCodes.RobotBusy else text)
+            raise RequestError(
+                code,
+                self._busy_message(session) if code == ErrorCodes.RobotBusy else text,
+            )
         future = asyncio.get_running_loop().create_future()
         self._recoveries[controller_id] = future
-        log.info("session %d: error recovery requested by %s", session.id, session.label)
+        log.info(
+            "session %d: error recovery requested by %s", session.id, session.label
+        )
         code, text = await future
         if code != ErrorCodes.Success:
             raise RequestError(code, text)
@@ -354,7 +446,9 @@ class RobotServer:
         force = _number(message, "force", minimum=0.0)
         epsilon_inner = _number(message, "epsilon_inner", 0.005, minimum=0.0)
         epsilon_outer = _number(message, "epsilon_outer", 0.005, minimum=0.0)
-        return await self._gripper_command(session, "grasp", width, speed, force, epsilon_inner, epsilon_outer)
+        return await self._gripper_command(
+            session, "grasp", width, speed, force, epsilon_inner, epsilon_outer
+        )
 
     async def _op_gripper_stop(self, session, message):
         self._require_gripper()
@@ -367,49 +461,91 @@ class RobotServer:
 
     def _require_gripper_idle(self, session):
         if self._gripper_owner is not None and self._gripper_owner is not session:
-            raise RequestError(ErrorCodes.RobotBusy,
-                               f"The gripper is moving for {self._gripper_owner.label}; wait until it finishes")
+            raise RequestError(
+                ErrorCodes.RobotBusy,
+                f"The gripper is moving for {self._gripper_owner.label}; wait until it finishes",
+            )
 
-    async def _run_motion(self, session, message, submission, points, duration, what="trajectory"):
+    async def _run_motion(
+        self, session, message, submission, points, duration, what="trajectory"
+    ):
         """Wait for a motion the controller accepted (submission: code, text, id) to end."""
         code, text, controller_id = submission
         code = ErrorCodes(code)
         if code != ErrorCodes.Success:
             if code == ErrorCodes.RobotBusy:
                 text = self._busy_message(session)
-            log.info("session %d: %s refused: %s: %s", session.id, what, code.name, text)
+            log.info(
+                "session %d: %s refused: %s: %s", session.id, what, code.name, text
+            )
             raise RequestError(code, text)
-        execution = Execution(session, message.get("id"), points, duration,
-                              asyncio.get_running_loop().create_future(), asyncio.current_task())
+        execution = Execution(
+            session,
+            message.get("id"),
+            points,
+            duration,
+            asyncio.get_running_loop().create_future(),
+            asyncio.current_task(),
+        )
         self._executions[controller_id] = execution
         if what == "trajectory":
-            log.info("session %d: executing trajectory %d for %s (%d points, %.2f s)",
-                     session.id, controller_id, session.label, execution.points, execution.duration)
+            log.info(
+                "session %d: executing trajectory %d for %s (%d points, %.2f s)",
+                session.id,
+                controller_id,
+                session.label,
+                execution.points,
+                execution.duration,
+            )
         else:
-            log.info("session %d: executing %s %d for %s", session.id, what, controller_id, session.label)
+            log.info(
+                "session %d: executing %s %d for %s",
+                session.id,
+                what,
+                controller_id,
+                session.label,
+            )
         code, text = await execution.future
         if code == ErrorCodes.Interrupted and execution.stopped_by:
             text = f"The {what} was stopped {execution.stopped_by}"
-        log.info("session %d: %s %d: %s%s", session.id, what, controller_id, code.name, f": {text}" if text else "")
+        log.info(
+            "session %d: %s %d: %s%s",
+            session.id,
+            what,
+            controller_id,
+            code.name,
+            f": {text}" if text else "",
+        )
         if code != ErrorCodes.Success:
             raise RequestError(code, text)
         return execution
 
     def _require_gripper(self):
         if self.gripper is None:
-            raise RequestError(ErrorCodes.GripperNotConnected, "This robot server runs without a gripper")
+            raise RequestError(
+                ErrorCodes.GripperNotConnected,
+                "This robot server runs without a gripper",
+            )
 
     async def _gripper_command(self, session, name, *args):
         self._require_gripper()
         if self._gripper_owner is not None:
-            raise RequestError(ErrorCodes.RobotBusy, f"The gripper is busy with a command from {self._gripper_owner.label}")
+            raise RequestError(
+                ErrorCodes.RobotBusy,
+                f"The gripper is busy with a command from {self._gripper_owner.label}",
+            )
         owner = self._arm_owner()
         if owner is not None and owner is not session:
-            raise RequestError(ErrorCodes.RobotBusy, f"The robot is executing a trajectory for {owner.label}")
+            raise RequestError(
+                ErrorCodes.RobotBusy,
+                f"The robot is executing a trajectory for {owner.label}",
+            )
         self._gripper_owner = session
         log.info("session %d: gripper %s%s", session.id, name, args)
         try:
-            code, success, text = await asyncio.to_thread(getattr(self.gripper, name), *args)
+            code, success, text = await asyncio.to_thread(
+                getattr(self.gripper, name), *args
+            )
         finally:
             if self._gripper_owner is session:
                 self._gripper_owner = None
@@ -419,15 +555,19 @@ class RobotServer:
 
     def _arm_owner(self):
         # The controller runs one trajectory at a time, so there is at most one.
-        return next(iter(self._executions.values())).session if self._executions else None
+        return (
+            next(iter(self._executions.values())).session if self._executions else None
+        )
 
     def _busy_message(self, session):
         owner = self._arm_owner()
         if owner is session:
             return "The robot is already executing a trajectory for this client"
         if owner is not None:
-            return (f"The robot is executing a trajectory for {owner.label}. Wait until it finishes, then plan "
-                    "again from the robot's current position.")
+            return (
+                f"The robot is executing a trajectory for {owner.label}. Wait until it finishes, then plan "
+                "again from the robot's current position."
+            )
         if self._snapshot["status"] == "recovering":
             return "The robot is recovering from an error; try again in a moment"
         return "The robot is busy; try again in a moment"
@@ -454,7 +594,10 @@ class RobotServer:
             await asyncio.sleep(MONITOR_PERIOD)
 
     def _log_status(self):
-        connected, error = self._snapshot["connected"], self._snapshot["connection_error"]
+        connected, error = (
+            self._snapshot["connected"],
+            self._snapshot["connection_error"],
+        )
         if connected and not self._last_connected:
             log.info("connected to the robot")
         elif self._last_connected and not connected:
@@ -466,55 +609,105 @@ class RobotServer:
     def _resolve(self):
         for controller_id, code, text in self._snapshot["results"]:
             execution = self._executions.pop(controller_id, None)
-            future = execution.future if execution is not None else self._recoveries.pop(controller_id, None)
+            future = (
+                execution.future
+                if execution is not None
+                else self._recoveries.pop(controller_id, None)
+            )
             if future is not None and not future.done():
                 future.set_result((ErrorCodes(code), text))
 
     def _watch_owners(self, now):
         trajectory = self._snapshot["trajectory"]
         execution = self._executions.get(trajectory["id"]) if trajectory else None
-        if execution is not None and not execution.stopped_by \
-                and now - execution.session.last_seen > self.owner_timeout:
-            execution.stopped_by = f"because {execution.session.label} stopped responding"
-            log.warning("session %d: no heartbeat for %.1f s during its trajectory, stopping the robot",
-                        execution.session.id, now - execution.session.last_seen)
+        if (
+            execution is not None
+            and not execution.stopped_by
+            and now - execution.session.last_seen > self.owner_timeout
+        ):
+            execution.stopped_by = (
+                f"because {execution.session.label} stopped responding"
+            )
+            log.warning(
+                "session %d: no heartbeat for %.1f s during its trajectory, stopping the robot",
+                execution.session.id,
+                now - execution.session.last_seen,
+            )
             self.controller.stop()
 
     def _state_event(self):
         s = self._snapshot
-        robot = {"connected": s["connected"], "status": s["status"], "error": s["connection_error"]}
+        robot = {
+            "connected": s["connected"],
+            "status": s["status"],
+            "error": s["connection_error"],
+        }
         if s["connected"] and s["state"] is not None:
             robot.update(s["state"])
-            robot.update(age=s["age"], seq=s["seq"], current_errors=s["current_errors"],
-                         last_motion_errors=s["last_motion_errors"])
+            robot.update(
+                age=s["age"],
+                seq=s["seq"],
+                current_errors=s["current_errors"],
+                last_motion_errors=s["last_motion_errors"],
+            )
         trajectory = None
         if s["trajectory"] is not None:
             t = s["trajectory"]
             execution = self._executions.get(t["id"])
-            trajectory = {key: t[key] for key in ("index", "length", "time", "duration", "stopping", "settling",
-                                                  "q_d")}
+            trajectory = {
+                key: t[key]
+                for key in (
+                    "index",
+                    "length",
+                    "time",
+                    "duration",
+                    "stopping",
+                    "settling",
+                    "q_d",
+                )
+            }
             trajectory.update(
                 session=execution.session.id if execution else None,
                 request=execution.request if execution else None,
                 owner=execution.session.label if execution else None,
             )
-        gripper = {"available": self.gripper is not None, "connected": False, "error": None, "busy": False,
-                   "session": self._gripper_owner.id if self._gripper_owner else None}
+        gripper = {
+            "available": self.gripper is not None,
+            "connected": False,
+            "error": None,
+            "busy": False,
+            "session": self._gripper_owner.id if self._gripper_owner else None,
+        }
         g = self._gripper_snapshot
         if g is not None:
-            gripper.update(connected=g["connected"], error=g["connection_error"], busy=g["busy"])
+            gripper.update(
+                connected=g["connected"], error=g["connection_error"], busy=g["busy"]
+            )
             if g["connected"] and g["state"] is not None:
                 gripper.update(g["state"])
-        return {"event": "state", "time": time.time(), "robot": robot, "trajectory": trajectory, "gripper": gripper}
+        return {
+            "event": "state",
+            "time": time.time(),
+            "robot": robot,
+            "trajectory": trajectory,
+            "gripper": gripper,
+        }
 
     def _broadcast(self, now):
         data = None
         for session in list(self._sessions.values()):
-            if not session.hello or session.state_period <= 0 or now < session.next_state:
+            if (
+                not session.hello
+                or session.state_period <= 0
+                or now < session.next_state
+            ):
                 continue
             session.next_state = max(session.next_state + session.state_period, now)
             transport = session.writer.transport
-            if transport.is_closing() or transport.get_write_buffer_size() > MAX_BUFFERED_STATE:
+            if (
+                transport.is_closing()
+                or transport.get_write_buffer_size() > MAX_BUFFERED_STATE
+            ):
                 continue
             if data is None:
                 data = protocol.encode(self._state_event())
@@ -533,7 +726,9 @@ class RobotServer:
             if wanted:
                 log.info("connecting to the robot at %s", self.controller.address)
             else:
-                log.info("no clients for %.0f s, releasing the robot", self.idle_release)
+                log.info(
+                    "no clients for %.0f s, releasing the robot", self.idle_release
+                )
             self.controller.set_connection_wanted(wanted)
             if self.gripper is not None:
                 self.gripper.set_connection_wanted(wanted)

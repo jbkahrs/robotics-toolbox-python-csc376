@@ -6,10 +6,9 @@ import pytest
 pytest.importorskip("swift")
 rtb = pytest.importorskip("roboticstoolbox")
 
-from csc376_franky.robot_wrapper import RobotWrapper  # noqa: E402
-from csc376_franky.visualizer import RtbVisualizer  # noqa: E402
-
-from helpers import linear_trajectory, wait_until  # noqa: E402
+from csc376_franky.robot_wrapper import RobotWrapper
+from csc376_franky.visualizer import RtbVisualizer
+from helpers import linear_trajectory, wait_until
 
 
 @pytest.fixture(autouse=True)
@@ -32,23 +31,31 @@ def test_preview_and_gripper(panda):
         assert seen == list(range(5))
         np.testing.assert_allclose(visualizer.q, q_traj[-1])
         assert visualizer.move_gripper(0.06, 1.0)
-        assert list(visualizer.rtb_robot_model.grippers[0].q) == pytest.approx([0.03, 0.03])
+        assert list(visualizer.rtb_robot_model.grippers[0].q) == pytest.approx(
+            [0.03, 0.03]
+        )
     finally:
         visualizer.stop()
 
 
 def test_transparent_panda_follows_the_real_robot(station, panda):
     with station.client() as robot:
-        visualizer = RtbVisualizer(panda, robot.get_current_joint_positions(), real_robot=robot)
+        visualizer = RtbVisualizer(
+            panda, robot.get_current_joint_positions(), real_robot=robot
+        )
         try:
             moved = robot.get_current_joint_positions() + [0.1, 0, 0, 0, 0, 0, 0]
             station.controller.sim_set_joint_positions(moved)
-            assert wait_until(lambda: np.allclose(visualizer._real_handle.q, moved, atol=1e-9))
+            assert wait_until(
+                lambda: np.allclose(visualizer._real_handle.q, moved, atol=1e-9)
+            )
         finally:
             visualizer.stop()
 
 
-def test_robot_wrapper_previews_where_the_robot_is_then_runs(station, panda, monkeypatch):
+def test_robot_wrapper_previews_where_the_robot_is_then_runs(
+    station, panda, monkeypatch
+):
     monkeypatch.setenv("CSC376_ROBOT_PORT", str(station.port))
     answers = iter(["", "yes"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
@@ -59,6 +66,8 @@ def test_robot_wrapper_previews_where_the_robot_is_then_runs(station, panda, mon
         assert wrapper.vizualizer is wrapper.visualizer  # the old name
         trajectory = linear_trajectory(q0, [0.1, 0, 0, 0, 0, 0, 0], 0.5)
         assert wrapper.run_joint_trajectory(trajectory, 0.01)
-        np.testing.assert_allclose(wrapper.get_current_joint_positions(), trajectory[-1], atol=2e-3)
+        np.testing.assert_allclose(
+            wrapper.get_current_joint_positions(), trajectory[-1], atol=2e-3
+        )
     finally:
         wrapper.stop()
