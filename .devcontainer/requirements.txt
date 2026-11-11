@@ -17,6 +17,8 @@ robot_descriptions>=2.0,<3.0
 # Windows browser no longer turns /workspaces/... into orkspaces/...
 swift-sim>=2.1.0
 websockets
+# csc376_franky's trajectory planner (../robot-interface)
+ruckig
 qpsolvers
 quadprog
 coal
@@ -29,6 +31,7 @@ sympy
 # use --no-build-isolation
 scikit-build-core>=0.9
 nanobind>=2
+pybind11>=2.12
 hatchling>=1.25
 editables
 cmake

@@ -202,6 +202,8 @@ archs = ["AMD64"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+# robot-interface/ has its own tests and pytest configuration; run them from there
+testpaths = ["tests"]
 filterwarnings = [
     "ignore:FigureCanvasAgg is non-interactive:UserWarning",
 ]

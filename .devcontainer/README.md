@@ -1,7 +1,7 @@
 # CSC376 dev container
 
-A ready-made Linux environment with Python 3.12, the Robotics Toolbox (installed from
-this repo), the Swift simulator and Jupyter. It runs the course notebooks the same way
+A ready-made Linux environment with Python 3.12, the Robotics Toolbox and the robot
+interface `csc376_franky` (both installed from this repo), the Swift simulator and Jupyter. It runs the course notebooks the same way
 on Windows, macOS and Linux.
 
 The container uses the host's network (`--net=host`) so the browser tab Swift opens can
