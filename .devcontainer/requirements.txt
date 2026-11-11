@@ -13,7 +13,9 @@ typing_extensions
 colored>2.0.0
 xacrodoc
 robot_descriptions>=2.0,<3.0
-swift-sim>=2.0.0
+# 2.1.0 strips a drive letter from mesh paths only when the path has one, so a
+# Windows browser no longer turns /workspaces/... into orkspaces/...
+swift-sim>=2.1.0
 websockets
 qpsolvers
 quadprog

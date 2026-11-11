@@ -36,7 +36,7 @@ so you can skip step 2.
    Environments**, then pick the environment at `/opt/venv/bin/python`.
 
 When a notebook calls `env.launch()`, Swift opens a new browser tab on your computer at
-`http://localhost:52000`.
+`http://localhost.:52000` (the dot after `localhost` is intended).
 
 ## Troubleshooting
 
@@ -45,6 +45,8 @@ When a notebook calls `env.launch()`, Swift opens a new browser tab on your comp
   *Dev Containers: Rebuild Container*.
 - If no tab opened, restart the kernel and try `env.launch(realtime=True, browser="notebook")`
   to show the simulator inside the notebook instead.
+- If the Swift tab is blank, open the **Ports** panel in VS Code. Right-click any port
+  from 52000 or 53000 upward and choose **Stop Forwarding Port**, then refresh the tab.
 - Close old Swift tabs. If one still shows an old page, hard-refresh it (`Ctrl+Shift+R`).
 
 
