@@ -111,6 +111,25 @@ jobs:
       - name: Test
         run: pytest tests/ --ignore=tests/test_blocks.py --timeout=50 --timeout_method=thread -q
 
+  # The CSC376 robot interface (robot-interface/): its client, and its robot
+  # server built without libfranka, driving the simulated robot.
+  robot-interface:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install the toolbox, the interface and the simulated robot server
+        run: pip install ".[swift]" "./robot-interface[planning,test]" ./robot-interface/server pytest-timeout
+
+      - name: Test
+        working-directory: robot-interface
+        run: python -m pytest --timeout=120 --timeout_method=thread -q
+
   all-tests-passed:
     name: All tests passed
     needs: [test-core, test]
