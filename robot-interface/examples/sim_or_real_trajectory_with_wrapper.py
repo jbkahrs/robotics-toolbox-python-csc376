@@ -6,7 +6,7 @@ from csc376_franky.robot_wrapper import RobotWrapper
 import numpy as np
 
 def main():
-    np.set_printoptions(precision=4, suppress=True,)
+    np.set_printoptions(precision=4, suppress=True)
 
     panda_rtb_model = rtb.models.Panda()
 

@@ -66,6 +66,8 @@ public:
         double time = 0.0;
         double duration = 0.0;
         bool stopping = false;
+        // Past the last point, holding it until the robot is at rest.
+        bool settling = false;
         Vec7 q_d{};
         Vec7 dq_d{};
         // The most recently finished commands, oldest first.
@@ -116,6 +118,7 @@ private:
         double time = 0.0;
         double duration = 0.0;
         bool stopping = false;
+        bool settling = false;
         Vec7 q_d{};
         Vec7 dq_d{};
     };
@@ -155,6 +158,9 @@ private:
     std::uint64_t next_id_ = 1;
     std::uint64_t active_id_ = 0;
     std::deque<Result> results_;
+    // The last read ended in an error that connection_error_ still shows.
+    // Used by the controller's thread only.
+    bool read_failed_ = false;
 
     // Ends the read loop so the thread can pick up a command.
     std::atomic<bool> wake_{false};
@@ -171,6 +177,7 @@ private:
     double time_ = 0.0;
     double duration_ = 0.0;
     bool stopping_ = false;
+    bool settling_ = false;
     Vec7 q_d_{};
     Vec7 dq_d_{};
 

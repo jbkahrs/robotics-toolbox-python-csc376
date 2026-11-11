@@ -6,7 +6,7 @@ import pytest
 from csc376_franky import protocol
 from csc376_franky.protocol import ErrorCodes
 
-from conftest import SIM_SPEED, linear_trajectory, wait_until
+from helpers import SIM_SPEED, linear_trajectory, wait_until
 
 
 @pytest.fixture
@@ -120,6 +120,37 @@ def test_stop_slows_to_rest_along_the_path(controller):
     np.testing.assert_allclose(q[1:], q0[1:], atol=2e-3)
 
 
+def test_stop_too_late_to_end_short_of_the_last_point_is_a_success(native):
+    limits = native.Limits()
+    limits.stop_time = 2.0  # slowing down covers half of this in trajectory time
+    controller = native.Controller.sim(limits, speed=SIM_SPEED)
+    try:
+        controller.set_connection_wanted(True)
+        assert wait_until(lambda: controller.snapshot()["state"] is not None)
+        trajectory = linear_trajectory(q_now(controller), [0.3, 0, 0, 0, 0, 0, 0], duration=3.0)
+        controller_id = start(controller, trajectory)
+        assert wait_until(lambda: (controller.snapshot()["trajectory"] or {}).get("time", 0) > 2.1, period=0.002)
+        controller.stop()
+        assert result_of(controller, controller_id) == (ErrorCodes.Success, "")
+        np.testing.assert_allclose(q_now(controller), trajectory[-1], atol=2e-3)
+    finally:
+        controller.shutdown()
+
+
+def test_a_finished_command_is_not_shown_running(controller):
+    trajectory = linear_trajectory(q_now(controller), [0.05, 0, 0, 0, 0, 0, 0], duration=0.3)
+    controller_id = start(controller, trajectory)
+    seen = []
+
+    def finished():
+        seen[:] = [controller.snapshot()]
+        return any(i == controller_id for i, _, _ in seen[0]["results"])
+
+    # The first snapshot with the result already shows the robot idle.
+    assert wait_until(finished, period=0.0)
+    assert seen[0]["status"] == "idle" and seen[0]["trajectory"] is None
+
+
 def test_tracking_error_stops_the_motion(controller):
     trajectory = linear_trajectory(q_now(controller), [0.3, 0, 0, 0, 0, 0, 0], duration=2.0)
     controller_id = start(controller, trajectory)
@@ -158,6 +189,24 @@ def test_user_stop_is_reported(controller):
     assert ErrorCodes(code) == ErrorCodes.RobotNotReady and "user stop" in message
 
 
+def test_user_stop_pressed_before_connecting_is_reported(native):
+    controller = native.Controller.sim(native.Limits(), speed=SIM_SPEED)
+    try:
+        controller.sim_set_robot_mode("user_stopped")
+        controller.set_connection_wanted(True)
+        assert wait_until(lambda: controller.snapshot()["state"] is not None)
+        snapshot = controller.snapshot()
+        assert snapshot["connected"] and snapshot["state"]["robot_mode"] == "user_stopped"
+        trajectory = linear_trajectory(q_now(controller), [0.1, 0, 0, 0, 0, 0, 0], 1.0)
+        code, message, _ = controller.execute(trajectory, 0.01)
+        assert ErrorCodes(code) == ErrorCodes.RobotNotReady and "user stop" in message
+        controller.sim_set_robot_mode("idle")
+        assert wait_until(lambda: controller.snapshot()["state"]["robot_mode"] == "idle")
+        assert result_of(controller, start(controller, trajectory))[0] == ErrorCodes.Success
+    finally:
+        controller.shutdown()
+
+
 def test_connection_loss_during_a_trajectory(controller):
     trajectory = linear_trajectory(q_now(controller), [0.3, 0, 0, 0, 0, 0, 0], duration=2.0)
     controller_id = start(controller, trajectory)
@@ -165,7 +214,7 @@ def test_connection_loss_during_a_trajectory(controller):
     controller.sim_drop_connection()
     assert result_of(controller, controller_id)[0] == ErrorCodes.ConnectionLost
     # It reconnects by itself while a connection is wanted.
-    assert wait_until(lambda: controller.snapshot()["state"] is not None, timeout=5.0)
+    assert wait_until(lambda: controller.snapshot()["state"] is not None)
     assert controller.snapshot()["status"] == "idle"
 
 
@@ -178,7 +227,7 @@ def test_unreachable_robot_reports_why(native):
         code, message, _ = controller.execute(np.repeat([native.READY_POSE], 2, axis=0), 0.01)
         assert ErrorCodes(code) == ErrorCodes.RobotNotConnected and "refused" in message
         controller.sim_refuse_connections("")
-        assert wait_until(lambda: controller.snapshot()["state"] is not None, timeout=5.0)
+        assert wait_until(lambda: controller.snapshot()["state"] is not None)
     finally:
         controller.shutdown()
 

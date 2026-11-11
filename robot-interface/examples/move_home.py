@@ -2,7 +2,7 @@ import numpy as np
 from csc376_franky import FrankaJointTrajectoryController, protocol
 
 def main():
-    np.set_printoptions(precision=4, suppress=True,)
+    np.set_printoptions(precision=4, suppress=True)
 
     # Fraction of libfranka's joint speed and acceleration limits (at most 0.3)
     speed_factor = 0.2

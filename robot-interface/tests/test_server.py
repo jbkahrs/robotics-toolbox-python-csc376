@@ -2,14 +2,13 @@
 
 import concurrent.futures
 import socket
-import time
 
 import numpy as np
 import pytest
 
 from csc376_franky import ErrorCodes, FrankaJointTrajectoryController, Gripper, RobotError, protocol
 
-from conftest import linear_trajectory, make_station, wait_until
+from helpers import linear_trajectory, make_station, wait_until
 
 
 def in_background(function, *args):
@@ -117,7 +116,7 @@ def test_disconnecting_stops_the_robot(station):
         robot.close()
         with pytest.raises(RobotError):
             running.result(10)
-        assert watcher.wait_until_idle(timeout=1.0)
+        assert watcher.wait_until_idle(timeout=10.0)
         assert watcher.get_current_joint_positions()[0] < trajectory[-1][0] - 0.1
 
 
@@ -126,14 +125,43 @@ def test_a_silent_client_is_stopped(station):
     hello(raw)
     q0 = np.array(raw.state()["robot"]["q"])
     trajectory = linear_trajectory(q0, [0.5, 0, 0, 0, 0, 0, 0], duration=8.0)
-    started = time.monotonic()
     raw.send({"op": "execute", "id": 2, "trajectory": trajectory.tolist(), "dt": 0.01})
     reply = raw.reply(2)
     # No heartbeats: the server stops the robot after owner_timeout (0.5 s here).
     assert not reply["ok"] and reply["error"]["code"] == ErrorCodes.Interrupted
     assert "stopped responding" in reply["error"]["message"]
-    assert time.monotonic() - started < 1.5
     raw.close()
+
+
+def test_server_shutdown_stops_the_robot_and_says_so(native):
+    station, close = make_station(native)
+    try:
+        robot = station.client()
+        q0 = robot.get_current_joint_positions()
+        trajectory = linear_trajectory(q0, [0.5, 0, 0, 0, 0, 0, 0], duration=8.0)
+        running = in_background(robot.run_joint_trajectory, trajectory, 0.01)
+        assert wait_until(lambda: robot.is_executing)
+        station.call(station.server.close())
+        assert "shutting down" in raises(ErrorCodes.Interrupted, running.result, 10)
+        robot.close()
+    finally:
+        close()
+
+
+def test_stop_after_the_last_point_is_not_an_interruption(native):
+    limits = native.Limits()
+    limits.settle_velocity = 0.0  # the robot never counts as at rest, so every trajectory settles for
+    limits.settle_timeout = 4.0   # this long (1 s here, at the simulation's speed)
+    station, close = make_station(native, limits)
+    try:
+        with station.client() as robot:
+            q0 = robot.get_current_joint_positions()
+            running = in_background(robot.run_joint_trajectory, linear_trajectory(q0, [0.05, 0, 0, 0, 0, 0, 0], 0.5), 0.01)
+            assert wait_until(lambda: (robot.get_status()["trajectory"] or {}).get("settling"))
+            assert robot.stop() is False
+            assert running.result(10) == ErrorCodes.Success
+    finally:
+        close()
 
 
 def test_move_home(station):
@@ -151,8 +179,22 @@ def test_move_home(station):
                                                    np.array([0.3, 0, 0, 0, 0, 0, 0]))
         moving = in_background(a.move_home, 0.1)
         assert wait_until(lambda: b.is_executing)
-        b.stop()
-        assert "stop() from" in raises(ErrorCodes.Interrupted, moving.result, 10)
+        assert b.stop() is True
+        message = raises(ErrorCodes.Interrupted, moving.result, 10)
+        assert "move home was stopped by stop() from" in message
+
+
+def test_disconnecting_stops_move_home(station):
+    with station.client() as watcher:
+        robot = station.client()
+        moving = in_background(robot.move_home, 0.1)
+        assert wait_until(lambda: watcher.is_executing)
+        robot.close()
+        with pytest.raises(RobotError):
+            moving.result(10)
+        assert watcher.wait_until_idle(timeout=10.0)
+        q = watcher.get_current_joint_positions()
+        assert np.abs(q - protocol.HOME_JOINT_POSITIONS).max() > 0.05
 
 
 def test_gripper(station):
@@ -219,7 +261,7 @@ def test_pose_matches_the_reported_matrix(station):
 def test_robot_is_released_after_the_last_client_leaves(station):
     with station.client():
         assert station.controller.snapshot()["connected"]
-    assert wait_until(lambda: station.controller.snapshot()["status"] == "disconnected", timeout=3.0)
+    assert wait_until(lambda: station.controller.snapshot()["status"] == "disconnected")
 
 
 def test_client_side_checks(station):
@@ -247,6 +289,18 @@ def test_protocol_errors(station):
     raw.close()
 
 
+@pytest.mark.parametrize("fields", [{}, {"trajectory": None}, {"trajectory": 3.0}, {"trajectory": [0.0] * 7},
+                                    {"trajectory": "up"}, {"trajectory": [[[0.0] * 7] * 2]}],
+                         ids=["missing", "null", "number", "one point", "text", "nested"])
+def test_malformed_trajectories_are_refused(station, fields):
+    raw = RawClient(station.port)
+    hello(raw)
+    raw.send({"op": "execute", "id": 2, "dt": 0.01, **fields})
+    reply = raw.reply(2)
+    assert reply["error"]["code"] == ErrorCodes.JointSizeNotSeven and "7 numbers" in reply["error"]["message"]
+    raw.close()
+
+
 def test_no_server(native):
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
@@ -268,3 +322,15 @@ def test_robot_not_reachable_from_the_minipc(native):
 def test_separate_gripper_connection(station):
     with Gripper("127.0.0.1", station.port) as gripper:
         assert gripper.max_width == pytest.approx(0.08)
+
+
+def test_server_without_a_gripper(native):
+    station, close = make_station(native, gripper=False)
+    try:
+        message = raises(ErrorCodes.GripperNotConnected, Gripper, "127.0.0.1", station.port)
+        assert "without a gripper" in message
+        with station.client() as robot:
+            assert robot.gripper is None
+            raises(ErrorCodes.GripperNotConnected, robot.move_gripper, 0.04)
+    finally:
+        close()

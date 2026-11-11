@@ -1,13 +1,13 @@
 import numpy as np
 import roboticstoolbox as rtb
-from csc376_franky.vizualizer import RtbVisualizer
+from csc376_franky.visualizer import RtbVisualizer
 from csc376_franky.motion_generator import RuckigMotionGenerator
 from spatialmath import SE3
 
 from csc376_franky import FrankaJointTrajectoryController
 
 def main():
-    np.set_printoptions(precision=4, suppress=True,)
+    np.set_printoptions(precision=4, suppress=True)
 
     # I. Speed factor settings
     relative_vel_factor = 0.02

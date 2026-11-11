@@ -15,6 +15,7 @@ using Vec7 = std::array<double, kDof>;
 constexpr Vec7 kJointPositionMin = {-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973};
 constexpr Vec7 kJointPositionMax = {2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973};
 constexpr Vec7 kJointVelocityMax = {2.1750, 2.1750, 2.1750, 2.1750, 2.6100, 2.6100, 2.6100};
+constexpr Vec7 kJointAccelerationMax = {15.0, 7.5, 10.0, 12.5, 15.0, 20.0, 20.0};
 
 // franka::RobotMode, as reported in the robot state.
 enum class RobotMode
@@ -31,7 +32,8 @@ enum class RobotMode
 const char* robotModeName(int mode);
 
 // Codes -1 to -8 keep the values of the old csc376_bind_franky.ErrorCodes.
-// csc376_franky/protocol.py mirrors this list; keep the two in step.
+// csc376_franky/protocol.py mirrors this list; keep the two in step (-21 to
+// -24 are used there, by the server and the client only).
 enum class ErrorCodes
 {
     Success = 1,
@@ -55,6 +57,7 @@ enum class ErrorCodes
     ConnectionLost = -18,
     GripperNotConnected = -19,
     GripperCommandFailed = -20,
+    JointAccelerationsAboveMaximumAllowed = -25,
 };
 
 const char* errorCodeName(ErrorCodes code);
@@ -67,6 +70,9 @@ struct Limits
     double joint_limit_margin = 0.01;
     // Fraction of kJointVelocityMax a trajectory may use.
     double velocity_scale = 0.3;
+    // Fraction of kJointAccelerationMax the velocity may change by from one
+    // segment to the next, per dt. Catches trajectories that zig-zag.
+    double acceleration_scale = 1.0;
     // Largest change of one joint between consecutive points [rad]. Catches IK
     // solutions that flip to another branch.
     double max_joint_step = 0.025;

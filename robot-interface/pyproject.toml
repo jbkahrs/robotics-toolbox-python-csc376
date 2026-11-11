@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "csc376-franky"
-version = "2.0.0"
+dynamic = ["version"]
 description = "CSC376 robot interface: plan and preview on a GPU PC, execute on the station's Panda through its miniPC"
 readme = "README.md"
 requires-python = ">=3.10"
 # Not the toolbox: the planner and the visualizer use the course fork's, which
 # its dev container and the lab's csc376 environment install, and the miniPC's
 # server needs only the client and the wire protocol.
-dependencies = ["numpy", "ruckig"]
+dependencies = ["numpy"]
 
 [project.optional-dependencies]
 # Planning and visualization anywhere else; install the course fork of the
@@ -20,9 +20,14 @@ planning = [
     "roboticstoolbox-python>=1.4.2",
     "spatialmath-python>=1.1.16",
     "scipy",
-    "swift-sim>=2.0.0",
+    "ruckig",
+    # The visualizer closes Swift through internals that 2.0.0 and 2.1.0 have.
+    "swift-sim>=2.0,<3",
 ]
 test = ["pytest>=7"]
+
+[tool.hatch.version]
+path = "csc376_franky/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["csc376_franky"]

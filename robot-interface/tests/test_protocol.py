@@ -24,6 +24,13 @@ def test_error_codes_match_the_controller(native):
         assert ErrorCodes[name] == int(member), name
 
 
+def test_client_and_server_have_the_same_version(native):
+    import csc376_franky
+    import csc376_franky_server
+
+    assert csc376_franky.__version__ == csc376_franky_server.__version__
+
+
 def test_messages_are_single_lines():
     line = protocol.encode({"op": "execute", "trajectory": [[0.1] * 7] * 2, "note": "a\nb"})
     assert line.endswith(b"\n") and line.count(b"\n") == 1

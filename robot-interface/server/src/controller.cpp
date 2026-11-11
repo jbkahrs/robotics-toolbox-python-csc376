@@ -266,6 +266,7 @@ Controller::Snapshot Controller::snapshot() const
             s.time = time_;
             s.duration = duration_;
             s.stopping = stopping_;
+            s.settling = settling_;
             s.q_d = q_d_;
             s.dq_d = dq_d_;
         }
@@ -381,6 +382,16 @@ void Controller::run()
         {
             backend_->read([this](const Measured& measured) {
                 publish(measured, nullptr);
+                // The robot is being read again, so the last read's error is over.
+                if (read_failed_)
+                {
+                    std::unique_lock<std::mutex> error_lock(mutex_, std::try_to_lock);
+                    if (error_lock.owns_lock())
+                    {
+                        connection_error_.clear();
+                        read_failed_ = false;
+                    }
+                }
                 return !wake_.load();
             });
         }
@@ -396,9 +407,12 @@ void Controller::run()
         if (lost)
             connectionLost(error);
         lock.lock();
+        if (lost)
+            read_failed_ = false;
         if (!lost && !error.empty())
         {
             // Not expected while reading; do not spin on it.
+            read_failed_ = true;
             connection_error_ = error;
             cv_.wait_for(lock, std::chrono::milliseconds(100), [this] { return shutdown_ || wake_.load(); });
         }
@@ -422,6 +436,7 @@ void Controller::runTrajectory(std::uint64_t id, std::vector<Vec7> points, doubl
         time_ = 0.0;
         duration_ = follower.duration();
         stopping_ = false;
+        settling_ = false;
         q_d_ = follower.firstPoint();
         dq_d_.fill(0.0);
     }
@@ -452,6 +467,7 @@ void Controller::runTrajectory(std::uint64_t id, std::vector<Vec7> points, doubl
             progress.time = follower.time();
             progress.duration = follower.duration();
             progress.stopping = follower.interrupted();
+            progress.settling = follower.phase() == TrajectoryFollower::Phase::Settling;
             progress.q_d = follower.qDesired();
             progress.dq_d = follower.dqDesired();
             publish(measured, &progress);
@@ -474,12 +490,15 @@ void Controller::runJointMotion(std::uint64_t id, const Vec7& q_goal, double spe
         time_ = 0.0;
         duration_ = 0.0;
         stopping_ = false;
+        settling_ = false;
         q_d_ = state_.q;
         dq_d_.fill(0.0);
     }
 
     runMotion(id, [&] {
-        // Starts where the robot is on the first cycle, as libfranka's MotionGenerator does.
+        // Starts on the first cycle from where the robot holds its joints (q_d,
+        // not the measured q), as libfranka's MotionGenerator does: the first
+        // command then continues the robot's own, without a step.
         std::optional<JointMotionGenerator> generator;
         Progress progress;
         progress.length = 2;
@@ -488,9 +507,9 @@ void Controller::runJointMotion(std::uint64_t id, const Vec7& q_goal, double spe
         backend_->controlJointPositions([&](const Measured& measured, double period) {
             if (!generator)
             {
-                generator.emplace(measured.q, q_goal, speed_factor);
+                generator.emplace(measured.q_d, q_goal, speed_factor);
                 progress.duration = generator->duration();
-                progress.q_d = measured.q;
+                progress.q_d = measured.q_d;
             }
             // Stopping slows the motion's clock down to rest over stop_time,
             // so the robot stops on the path, like a stopped trajectory.
@@ -523,7 +542,7 @@ void Controller::runMotion(std::uint64_t id, const std::function<bool()>& motion
         if (motion())
         {
             code = ErrorCodes::Interrupted;
-            message = "The trajectory was stopped before its end";
+            message = "The motion was stopped before its end";
         }
     }
     catch (const TrajectoryAbort& e)
@@ -603,6 +622,7 @@ void Controller::publish(const Measured& measured, const Progress* progress)
         time_ = progress->time;
         duration_ = progress->duration;
         stopping_ = progress->stopping;
+        settling_ = progress->settling;
         q_d_ = progress->q_d;
         dq_d_ = progress->dq_d;
     }
@@ -631,6 +651,11 @@ void Controller::finish(std::uint64_t id, ErrorCodes code, const std::string& me
     results_.push_back(Result{id, code, message});
     if (results_.size() > kMaxResults)
         results_.pop_front();
+    // In the same breath as the result, so that no snapshot shows a finished
+    // command still running.
+    active_id_ = 0;
+    if (status_ == Status::Executing || status_ == Status::Recovering)
+        status_ = Status::Idle;
 }
 
 void Controller::finishPendingLocked(ErrorCodes code, const std::string& message)

@@ -105,6 +105,7 @@ py::dict snapshotDict(const Controller::Snapshot& s)
         t["time"] = s.time;
         t["duration"] = s.duration;
         t["stopping"] = s.stopping;
+        t["settling"] = s.settling;
         t["q_d"] = s.q_d;
         t["dq_d"] = s.dq_d;
         d["trajectory"] = t;
@@ -181,12 +182,14 @@ PYBIND11_MODULE(_control, m)
         .value("TrackingErrorTooLarge", ErrorCodes::TrackingErrorTooLarge)
         .value("ConnectionLost", ErrorCodes::ConnectionLost)
         .value("GripperNotConnected", ErrorCodes::GripperNotConnected)
-        .value("GripperCommandFailed", ErrorCodes::GripperCommandFailed);
+        .value("GripperCommandFailed", ErrorCodes::GripperCommandFailed)
+        .value("JointAccelerationsAboveMaximumAllowed", ErrorCodes::JointAccelerationsAboveMaximumAllowed);
 
     py::class_<Limits>(m, "Limits")
         .def(py::init<>())
         .def_readwrite("joint_limit_margin", &Limits::joint_limit_margin)
         .def_readwrite("velocity_scale", &Limits::velocity_scale)
+        .def_readwrite("acceleration_scale", &Limits::acceleration_scale)
         .def_readwrite("max_joint_step", &Limits::max_joint_step)
         .def_readwrite("start_tolerance", &Limits::start_tolerance)
         .def_readwrite("tracking_error_limit", &Limits::tracking_error_limit)

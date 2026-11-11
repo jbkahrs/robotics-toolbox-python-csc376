@@ -135,15 +135,15 @@ class _Connection:
     def closed_error(self):
         return RobotError(ErrorCodes.ConnectionLost, f"Not connected to the robot server: {self._close_reason}")
 
-    def request_async(self, op, **fields):
+    def start_request(self, op, **fields):
+        """Send a request; returns the future of its result and the request's id."""
         future = concurrent.futures.Future()
         with self._lock:
             if self._closed:
                 future.set_exception(self.closed_error())
-                return future
+                return future, None
             request_id = next(self._ids)
             self._pending[request_id] = future
-        future.request_id = request_id
         try:
             self._send({"op": op, "id": request_id, **fields})
         except BaseException as error:
@@ -151,7 +151,10 @@ class _Connection:
                 self._pending.pop(request_id, None)
             if not future.done():
                 future.set_exception(error)
-        return future
+        return future, request_id
+
+    def request_async(self, op, **fields):
+        return self.start_request(op, **fields)[0]
 
     def request(self, op, timeout=10.0, **fields):
         future = self.request_async(op, **fields)
@@ -385,7 +388,7 @@ class FrankaJointTrajectoryController:
         if not np.isfinite(trajectory).all() or not np.isfinite(dt):
             raise RobotError(ErrorCodes.NonFiniteValue, "joint_trajectory and dt must be finite numbers")
 
-        future = self._connection.request_async("execute", trajectory=trajectory.tolist(), dt=float(dt))
+        future, request_id = self._connection.start_request("execute", trajectory=trajectory.tolist(), dt=float(dt))
         index = -1
         try:
             while True:
@@ -393,11 +396,11 @@ class FrankaJointTrajectoryController:
                     future.result(timeout=0.02)
                     break
                 except concurrent.futures.TimeoutError:
-                    index = self._report_progress(future.request_id, index)
+                    index = self._report_progress(request_id, index)
         except KeyboardInterrupt:
             self._stop_after_interrupt(future)
             raise
-        self._report_progress(future.request_id, index, end=len(trajectory) - 1)
+        self._report_progress(request_id, index, end=len(trajectory) - 1)
         return ErrorCodes.Success
 
     def _report_progress(self, request_id, index, end=None):
@@ -448,8 +451,9 @@ class FrankaJointTrajectoryController:
 
     def stop(self):
         """Stop the running trajectory, whichever client started it: the robot
-        slows to rest along its path within about half a second."""
-        self._connection.request("stop")
+        slows to rest along its path within about half a second. Returns True
+        if there was a trajectory to stop."""
+        return bool(self._connection.request("stop").get("was_executing"))
 
     def recover(self):
         """Clear the robot's error after a reflex (e.g. a collision) so it can move
@@ -489,7 +493,15 @@ class Gripper:
                             "library": f"csc376_franky {__version__}"})
                 if not info.get("gripper"):
                     raise RobotError(ErrorCodes.GripperNotConnected, "The robot server runs without a gripper")
-                _connection.wait_for_state(lambda s: "width" in s["gripper"], timeout)
+                if _connection.wait_for_state(lambda s: "width" in s["gripper"], timeout) is None:
+                    if _connection.closed:
+                        raise _connection.closed_error()
+                    state, _ = _connection.latest_state()
+                    error = state["gripper"].get("error") if state else None
+                    raise RobotError(
+                        ErrorCodes.GripperNotConnected,
+                        "The miniPC cannot reach the gripper" + (f" ({error})" if error else "") +
+                        ". Check that the Franka Hand is connected and the robot is on.")
             except BaseException:
                 _connection.close()
                 raise

@@ -90,6 +90,7 @@ Measured SimBackend::measuredLocked() const
     Measured m;
     m.q = q_;
     m.dq = dq_;
+    m.q_d = q_;
     m.O_T_EE = pandaForwardKinematics(q_);
     m.robot_mode = mode_;
     m.time = time_;

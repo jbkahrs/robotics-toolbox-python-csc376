@@ -35,6 +35,9 @@ def build_parser():
                    help="how far [rad] a trajectory may start from the measured joint positions (default: 0.02)")
     p.add_argument("--velocity-scale", type=float, default=None,
                    help="fraction of the Panda's joint velocity limits a trajectory may use (default: 0.3)")
+    p.add_argument("--acceleration-scale", type=float, default=None,
+                   help="fraction of the Panda's joint acceleration limits the velocity may change by between "
+                        "trajectory points (default: 1.0)")
     p.add_argument("--state-rate", type=float, default=50.0, help="robot state messages per second (default: 50)")
     p.add_argument("--idle-release", type=float, default=30.0,
                    help="seconds after the last client leaves before the robot is released (default: 30)")
@@ -70,6 +73,10 @@ def make_limits(control, args):
         if not 0.0 < args.velocity_scale <= 1.0:
             sys.exit("error: --velocity-scale must be in (0, 1]")
         limits.velocity_scale = args.velocity_scale
+    if args.acceleration_scale is not None:
+        if not args.acceleration_scale > 0.0:
+            sys.exit("error: --acceleration-scale must be positive")
+        limits.acceleration_scale = args.acceleration_scale
     return limits
 
 
@@ -122,6 +129,8 @@ def main(argv=None):
         asyncio.run(serve(server, args.bind, args.port))
     except OSError as error:
         controller.shutdown()
+        if gripper is not None:
+            gripper.shutdown()
         sys.exit(f"error: cannot listen on {args.bind}:{args.port}: {error}")
     return 0
 

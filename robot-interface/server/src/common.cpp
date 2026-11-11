@@ -43,6 +43,7 @@ const char* errorCodeName(ErrorCodes code)
     case ErrorCodes::ConnectionLost: return "ConnectionLost";
     case ErrorCodes::GripperNotConnected: return "GripperNotConnected";
     case ErrorCodes::GripperCommandFailed: return "GripperCommandFailed";
+    case ErrorCodes::JointAccelerationsAboveMaximumAllowed: return "JointAccelerationsAboveMaximumAllowed";
     }
     return "Unknown";
 }

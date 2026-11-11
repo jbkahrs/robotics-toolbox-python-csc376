@@ -7,9 +7,9 @@ pytest.importorskip("swift")
 rtb = pytest.importorskip("roboticstoolbox")
 
 from csc376_franky.robot_wrapper import RobotWrapper  # noqa: E402
-from csc376_franky.vizualizer import RtbVisualizer  # noqa: E402
+from csc376_franky.visualizer import RtbVisualizer  # noqa: E402
 
-from conftest import linear_trajectory, wait_until  # noqa: E402
+from helpers import linear_trajectory, wait_until  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -55,7 +55,8 @@ def test_robot_wrapper_previews_where_the_robot_is_then_runs(station, panda, mon
     wrapper = RobotWrapper(True, True, panda, panda.qr, "127.0.0.1")
     try:
         q0 = wrapper.get_current_joint_positions()
-        np.testing.assert_allclose(wrapper.vizualizer.q, q0)
+        np.testing.assert_allclose(wrapper.visualizer.q, q0)
+        assert wrapper.vizualizer is wrapper.visualizer  # the old name
         trajectory = linear_trajectory(q0, [0.1, 0, 0, 0, 0, 0, 0], 0.5)
         assert wrapper.run_joint_trajectory(trajectory, 0.01)
         np.testing.assert_allclose(wrapper.get_current_joint_positions(), trajectory[-1], atol=2e-3)

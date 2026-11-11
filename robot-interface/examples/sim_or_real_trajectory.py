@@ -5,13 +5,13 @@ from csc376_franky.motion_generator import RuckigMotionGenerator
 import numpy as np
 
 def main():
-    np.set_printoptions(precision=4, suppress=True,)
+    np.set_printoptions(precision=4, suppress=True)
 
-    simulation = True # Radian: I don't like using sim bool
+    simulation = True # False runs on the real robot instead of in Swift
     panda_rtb_model = rtb.models.Panda()
 
     if simulation:
-        from csc376_franky.vizualizer import RtbVisualizer
+        from csc376_franky.visualizer import RtbVisualizer
         q_start = panda_rtb_model.qr
         robot = RtbVisualizer(panda_rtb_model, q_start)
     else:
@@ -63,7 +63,7 @@ def main():
         if yes_or_else != "yes":
             print("User did not type [yes], will not run on sim/real robot")
             return robot
-        def trajectory_callback(index):
+        def trajectory_callback(index, q_traj=q_traj):
             print(f"At trajectory index: {index}")
             print(f"Commanding joint positions: {q_traj[index]}")
         robot.set_trajectory_callback(trajectory_callback)

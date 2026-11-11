@@ -64,6 +64,8 @@ class Execution:
     points: int
     duration: float
     future: asyncio.Future
+    # The task that answers the request once the motion has ended.
+    task: asyncio.Task
     # Why it was stopped, if it was, for the reply's message.
     stopped_by: str = ""
 
@@ -106,6 +108,7 @@ class RobotServer:
         self._last_connection_error = None
         self._server = None
         self._monitor_task = None
+        self._closed = False
 
     async def start(self, host, port):
         self._server = await asyncio.start_server(self._handle, host, port, limit=protocol.MAX_MESSAGE_BYTES)
@@ -118,13 +121,26 @@ class RobotServer:
 
     async def close(self):
         """Stop serving, stop any motion and disconnect from the robot."""
+        if self._closed:
+            return
+        self._closed = True
         if self._server is not None:
             self._server.close()
+        # Stop a running motion and tell its client how it ended before the
+        # connections close.
+        executions = list(self._executions.values())
+        for execution in executions:
+            if not execution.stopped_by:
+                execution.stopped_by = "because the robot server is shutting down"
+        self.controller.stop()
+        if executions and self._monitor_task is not None:
+            limits = self.controller.limits
+            await asyncio.wait([execution.task for execution in executions],
+                               timeout=limits.stop_time + limits.settle_timeout + 1.0)
         for session in list(self._sessions.values()):
             session.writer.close()
         if self._monitor_task is not None:
             self._monitor_task.cancel()
-        self.controller.stop()
         await asyncio.to_thread(self.controller.shutdown)
         if self.gripper is not None:
             await asyncio.to_thread(self.gripper.shutdown)
@@ -250,6 +266,7 @@ class RobotServer:
             "limits": {
                 "start_tolerance": limits.start_tolerance,
                 "velocity_scale": limits.velocity_scale,
+                "acceleration_scale": limits.acceleration_scale,
                 "max_joint_step": limits.max_joint_step,
                 "joint_limit_margin": limits.joint_limit_margin,
                 "tracking_error_limit": limits.tracking_error_limit,
@@ -280,6 +297,9 @@ class RobotServer:
         except (TypeError, ValueError):
             raise RequestError(ErrorCodes.JointSizeNotSeven,
                                "The trajectory must be a list of joint positions, each a list of 7 numbers") from None
+        if points.ndim != 2 or points.shape[1] != 7:
+            raise RequestError(ErrorCodes.JointSizeNotSeven,
+                               "The trajectory must be a list of joint positions, each a list of 7 numbers")
         self._require_gripper_idle(session)
         execution = await self._run_motion(session, message, self.controller.execute(points, dt),
                                            len(points), dt * (len(points) - 1))
@@ -294,12 +314,18 @@ class RobotServer:
         return {}
 
     async def _op_stop(self, session, message):
-        for execution in self._executions.values():
+        self._refresh()
+        trajectory = self._snapshot["trajectory"]
+        # Past its last point a trajectory only waits for the robot to come to
+        # rest: there is nothing left to stop, and it ends as a success.
+        settling = bool(trajectory and trajectory["settling"])
+        executions = [] if settling else list(self._executions.values())
+        for execution in executions:
             if not execution.stopped_by:
                 execution.stopped_by = "by stop()" if execution.session is session else f"by stop() from {session.label}"
             log.info("session %d: stop requested by %s", execution.session.id, session.label)
         self.controller.stop()
-        return {"was_executing": bool(self._executions)}
+        return {"was_executing": bool(executions)}
 
     async def _op_recover(self, session, message):
         code, text, controller_id = self.controller.recover()
@@ -354,7 +380,7 @@ class RobotServer:
             log.info("session %d: %s refused: %s: %s", session.id, what, code.name, text)
             raise RequestError(code, text)
         execution = Execution(session, message.get("id"), points, duration,
-                              asyncio.get_running_loop().create_future())
+                              asyncio.get_running_loop().create_future(), asyncio.current_task())
         self._executions[controller_id] = execution
         if what == "trajectory":
             log.info("session %d: executing trajectory %d for %s (%d points, %.2f s)",
@@ -363,7 +389,7 @@ class RobotServer:
             log.info("session %d: executing %s %d for %s", session.id, what, controller_id, session.label)
         code, text = await execution.future
         if code == ErrorCodes.Interrupted and execution.stopped_by:
-            text = f"The trajectory was stopped {execution.stopped_by}"
+            text = f"The {what} was stopped {execution.stopped_by}"
         log.info("session %d: %s %d: %s%s", session.id, what, controller_id, code.name, f": {text}" if text else "")
         if code != ErrorCodes.Success:
             raise RequestError(code, text)
@@ -465,7 +491,8 @@ class RobotServer:
         if s["trajectory"] is not None:
             t = s["trajectory"]
             execution = self._executions.get(t["id"])
-            trajectory = {key: t[key] for key in ("index", "length", "time", "duration", "stopping", "q_d")}
+            trajectory = {key: t[key] for key in ("index", "length", "time", "duration", "stopping", "settling",
+                                                  "q_d")}
             trajectory.update(
                 session=execution.session.id if execution else None,
                 request=execution.request if execution else None,

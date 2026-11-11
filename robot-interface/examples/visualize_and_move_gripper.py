@@ -1,6 +1,6 @@
 
 import roboticstoolbox as rtb
-from csc376_franky.vizualizer import RtbVisualizer
+from csc376_franky.visualizer import RtbVisualizer
 from csc376_franky import Gripper
 
 def main():

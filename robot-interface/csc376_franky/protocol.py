@@ -48,7 +48,7 @@ HOME_JOINT_POSITIONS = (0.0, -math.pi / 4, 0.0, -3 * math.pi / 4, 0.0, math.pi /
 
 class ErrorCodes(enum.IntEnum):
     """Why a request failed. Codes -1 to -8 keep the values of the old
-    csc376_bind_franky.ErrorCodes; -1 to -20 mirror the C++ enum in
+    csc376_bind_franky.ErrorCodes; -1 to -20 and -25 mirror the C++ enum in
     server/include/csc376_franky/common.hpp."""
 
     Success = 1
@@ -77,6 +77,7 @@ class ErrorCodes(enum.IntEnum):
     IncompatibleVersion = -22
     ServerUnavailable = -23
     Timeout = -24
+    JointAccelerationsAboveMaximumAllowed = -25
 
 
 def encode(message):

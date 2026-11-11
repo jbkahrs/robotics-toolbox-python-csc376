@@ -3,6 +3,7 @@
 
 #include <franka/exception.h>
 #include <franka/gripper.h>
+#include <franka/lowpass_filter.h>
 #include <franka/model.h>
 #include <franka/rate_limiting.h>
 #include <franka/robot.h>
@@ -41,6 +42,7 @@ Measured toMeasured(const franka::RobotState& state)
     Measured m;
     m.q = state.q;
     m.dq = state.dq;
+    m.q_d = state.q_d;
     m.tau_J = state.tau_J;
     m.tau_ext_hat_filtered = state.tau_ext_hat_filtered;
     m.O_T_EE = state.O_T_EE;
@@ -70,20 +72,7 @@ public:
         {
             auto robot = std::make_unique<franka::Robot>(
                 robot_ip_, enforce_realtime_ ? franka::RealtimeConfig::kEnforce : franka::RealtimeConfig::kIgnore);
-            // The old controller's collision thresholds [Nm], [N].
-            robot->setCollisionBehavior(
-                {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}},
-                {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}},
-                {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}},
-                {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}},
-                {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}},
-                {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}},
-                {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}},
-                {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}});
-            // The robot's own joint impedance, for controlJointPositions (libfranka's
-            // setDefaultBehavior); the torque loop in control() does not use it.
-            robot->setJointImpedance({{3000, 3000, 3000, 2500, 2500, 2000, 2000}});
-            model_ =std::make_unique<franka::Model>(robot->loadModel());
+            model_ = std::make_unique<franka::Model>(robot->loadModel());
             robot_ = std::move(robot);
         }
         catch (const franka::Exception& e)
@@ -91,12 +80,24 @@ public:
             model_.reset();
             throw BackendNetworkError(e.what());
         }
+        configured_ = false;
+        try
+        {
+            configure();
+        }
+        catch (const BackendControlError&)
+        {
+            // The robot refuses to be configured while it cannot move (user stop
+            // pressed, reflex). It is connected all the same, so its state says
+            // why; configure() runs again before the first motion.
+        }
     }
 
     void disconnect() override
     {
         model_.reset();
         robot_.reset();
+        configured_ = false;
     }
 
     bool isConnected() const override { return robot_ != nullptr; }
@@ -125,8 +126,11 @@ public:
     void control(const ControlCallback& callback) override
     {
         requireConnection();
+        configure();
         try
         {
+            // limit_rate and the cutoff frequency are libfranka 0.9's defaults,
+            // spelled out because later versions default to neither.
             robot_->control([&](const franka::RobotState& state, franka::Duration period) -> franka::Torques {
                 storeErrors(state);
                 const Command command = callback(toMeasured(state), period.toSec());
@@ -139,7 +143,7 @@ public:
                 }
                 const franka::Torques torques(franka::limitRate(franka::kMaxTorqueRate, tau, state.tau_J_d));
                 return command.finished ? franka::MotionFinished(torques) : torques;
-            });
+            }, true, franka::kDefaultCutoffFrequency);
         }
         catch (const TrajectoryAbort&)
         {
@@ -159,6 +163,7 @@ public:
     void controlJointPositions(const ControlCallback& callback) override
     {
         requireConnection();
+        configure();
         try
         {
             robot_->control([&](const franka::RobotState& state, franka::Duration period) -> franka::JointPositions {
@@ -166,7 +171,7 @@ public:
                 const Command command = callback(toMeasured(state), period.toSec());
                 const franka::JointPositions positions(command.q_d);
                 return command.finished ? franka::MotionFinished(positions) : positions;
-            });
+            }, franka::ControllerMode::kJointImpedance, true, franka::kDefaultCutoffFrequency);
         }
         catch (const TrajectoryAbort&)
         {
@@ -215,6 +220,39 @@ private:
             throw BackendNetworkError("not connected to the robot");
     }
 
+    // Sets the collision thresholds and the joint impedance, once per connection.
+    void configure()
+    {
+        if (configured_)
+            return;
+        try
+        {
+            // The old controller's collision thresholds [Nm], [N].
+            robot_->setCollisionBehavior(
+                {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}},
+                {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}},
+                {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}},
+                {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}},
+                {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}},
+                {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}},
+                {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}},
+                {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}});
+            // The robot's own joint impedance, for controlJointPositions (libfranka's
+            // setDefaultBehavior); the torque loop in control() does not use it.
+            robot_->setJointImpedance({{3000, 3000, 3000, 2500, 2500, 2000, 2000}});
+            configured_ = true;
+        }
+        catch (const franka::NetworkException& e)
+        {
+            disconnect();
+            throw BackendNetworkError(e.what());
+        }
+        catch (const franka::Exception& e)
+        {
+            throw BackendControlError(e.what());
+        }
+    }
+
     // Called at 1 kHz: never waits for a reader, and copies without allocating.
     void storeErrors(const franka::RobotState& state)
     {
@@ -232,6 +270,7 @@ private:
     const bool enforce_realtime_;
     std::unique_ptr<franka::Robot> robot_;
     std::unique_ptr<franka::Model> model_;
+    bool configured_ = false;
     mutable std::mutex errors_mutex_;
     franka::Errors current_errors_;
     franka::Errors last_motion_errors_;

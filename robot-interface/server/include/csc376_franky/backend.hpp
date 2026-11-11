@@ -19,6 +19,8 @@ struct Measured
 {
     Vec7 q{};
     Vec7 dq{};
+    // Where the robot's own controller holds or commands the joints.
+    Vec7 q_d{};
     Vec7 tau_J{};
     Vec7 tau_ext_hat_filtered{};
     std::array<double, 16> O_T_EE{};

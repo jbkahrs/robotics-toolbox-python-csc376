@@ -53,6 +53,7 @@ public:
     const Vec7& dqDesired() const { return dq_d_; }
     const Vec7& firstPoint() const { return points_.front(); }
     Phase phase() const { return phase_; }
+    // True if stop ended the playback before the last point.
     bool interrupted() const { return interrupted_; }
     // Index of the last point the playback has passed.
     std::size_t index() const;

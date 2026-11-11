@@ -5,7 +5,7 @@ import pytest
 
 from csc376_franky.protocol import ErrorCodes
 
-from conftest import linear_trajectory
+from helpers import linear_trajectory
 
 READY = np.array([0.0, -0.3, 0.0, -2.2, 0.0, 2.0, np.pi / 4])
 
@@ -91,6 +91,23 @@ def test_speed_limit(native):
     assert validate(native, slow, dt=0.01)[0] == ErrorCodes.Success
 
 
+def test_zig_zag_is_refused(native):
+    # 0.02 rad back and forth every 40 ms is within the step and speed limits, but
+    # turns the joint around at 25 rad/s^2; q[0] may do 15.
+    trajectory = np.repeat(READY[None, :], 20, axis=0)
+    trajectory[1::2, 0] += 0.02
+    code, message = validate(native, trajectory, dt=0.04)
+    assert code == ErrorCodes.JointAccelerationsAboveMaximumAllowed
+    assert "q[0]" in message and "point 1;" in message
+    assert validate(native, trajectory, dt=0.04, acceleration_scale=2.0)[0] == ErrorCodes.Success
+
+
+def test_constant_velocity_from_the_first_point_is_accepted(native):
+    # np.linspace between two joint positions: no acceleration between its points.
+    trajectory = np.linspace(READY, READY + [0.3, 0, 0, 0, 0, 0, 0], 101)
+    assert validate(native, trajectory, dt=0.01)[0] == ErrorCodes.Success
+
+
 def test_length_limits(native):
     trajectory = np.repeat(READY[None, :], 1001, axis=0)
     assert validate(native, trajectory, dt=0.7)[0] == ErrorCodes.TrajectoryTooLong
@@ -155,3 +172,18 @@ def test_follower_stops_along_the_path(native):
     positions = [c[1][0] for c in commands]
     assert all(b >= a - 1e-12 for a, b in zip(positions, positions[1:]))
     assert np.all(commands[-1][2] == 0.0)
+
+
+def test_follower_reaching_the_end_while_stopping_was_not_interrupted(native):
+    trajectory = linear_trajectory(READY, [0.5, 0, 0, 0, 0, 0, 0], duration=4.0, dt=0.01)
+    # 0.1 s before the end: slowing down over stop_time covers more than that.
+    follower, commands = follow(native, trajectory, 0.01, stop_at=3900)
+    assert follower.phase == "done" and not follower.interrupted
+    np.testing.assert_allclose(commands[-1][1], trajectory[-1], atol=1e-12)
+
+
+def test_follower_ignores_a_stop_while_settling(native):
+    trajectory = linear_trajectory(READY, [0.1, 0, 0, 0, 0, 0, 0], duration=1.0, dt=0.01)
+    follower, commands = follow(native, trajectory, 0.01, stop_at=1010)
+    assert commands[1010][0] == "settling"
+    assert follower.phase == "done" and not follower.interrupted

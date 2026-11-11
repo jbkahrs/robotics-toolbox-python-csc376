@@ -113,6 +113,26 @@ ValidationResult validateTrajectory(
                                 num(velocity_max) + " rad/s. Slow the trajectory down.");
         }
     }
+
+    // The follower feeds each segment's velocity forward, so a change of
+    // velocity at a point is a step in the commanded torque. The first and the
+    // last segment are not compared with rest: a constant-velocity trajectory
+    // (np.linspace) has always been accepted.
+    for (std::size_t i = 1; i + 1 < points.size(); ++i)
+    {
+        for (int j = 0; j < kDof; ++j)
+        {
+            const double before = points[i][j] - points[i - 1][j];
+            const double after = points[i + 1][j] - points[i][j];
+            const double acceleration = std::abs(after - before) / (dt * dt);
+            const double acceleration_max = limits.acceleration_scale * kJointAccelerationMax[j];
+            if (acceleration > acceleration_max)
+                return fail(ErrorCodes::JointAccelerationsAboveMaximumAllowed,
+                            joint(j) + " would accelerate at " + num(acceleration) + " rad/s^2 at point " +
+                                std::to_string(i) + "; the maximum is " + num(acceleration_max) +
+                                " rad/s^2. Change the velocity over more points instead of at one.");
+        }
+    }
     return {};
 }
 
@@ -147,6 +167,10 @@ void TrajectoryFollower::step(double period, const Vec7& q, const Vec7& dq, bool
     if (phase_ == Phase::Running || phase_ == Phase::Stopping)
     {
         t_ = std::min(duration_, t_ + rate_ * period);
+        // A stop that came too late to end the playback short of the last
+        // point did not interrupt anything.
+        if (t_ >= duration_)
+            interrupted_ = false;
         if (t_ >= duration_ || rate_ <= 0.0)
             phase_ = Phase::Settling;
     }

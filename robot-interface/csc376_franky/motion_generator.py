@@ -1,7 +1,6 @@
 import copy
-import numpy as np
-from typing import List, Tuple
 
+import numpy as np
 from ruckig import InputParameter, OutputParameter, Result, Ruckig
 from scipy.spatial.transform import Rotation
 from spatialmath import SE3
@@ -13,7 +12,14 @@ from spatialmath import SE3
 
 def normalize_rx_angle(rv_vector):
     """
-    Normalize the rx angle of the rotation vector to be between -pi and pi(deal with rx angle not continuous issue
+    Map the rx component of the rotation vector so that it is continuous where rx itself jumps.
+
+    With the hand pointing down, rx is close to pi or to -pi and flips between the
+    two from one pose to the next. The mapped value is close to 0 on both sides, so
+    Ruckig can interpolate it. The mapping is its own inverse:
+    calculate_cartesian_pose_trajectory applies it to the two ends of a move, and
+    cartesian_pose_to_joint_trajectory applies it again to every interpolated pose
+    to get the rotation vector back. Both calls are needed.
     """
     rv_normalized = rv_vector.copy()  # Make a copy to avoid modifying original
     # Apply the rule to the 4th element (index 3)
@@ -83,20 +89,26 @@ class RuckigMotionGenerator:
     def __init__(self):
         self.dt = 0.01
         self.ruckig = Ruckig(dofs=7, delta_time=self.dt)
-        self.PANDA_VEL_LIM_CARTESIAN = np.array([3.0, 3.0, 3.0, 2.5, 2.5, 2.5, 2.62])   # m/s
-        self.PANDA_ACC_LIM_CARTESIAN =  np.array([9.0, 9.0, 9.0, 17.0, 17.0, 17.0, 10.0]) # m/s²
-        self.PANDA_JERK_LIM_CARTESIAN = np.array([4500.0, 4500.0, 4500.0, 8500.0, 8500.0, 8500.0, 5000.0]) # m/s³
+        # The Panda's Cartesian limits from its datasheet, for [x, y, z, rx, ry, rz, elbow]:
+        # translation, rotation and elbow.
+        self.PANDA_VEL_LIM_CARTESIAN = np.array([1.7, 1.7, 1.7, 2.5, 2.5, 2.5, 2.175])   # m/s, rad/s
+        self.PANDA_ACC_LIM_CARTESIAN = np.array([13.0, 13.0, 13.0, 25.0, 25.0, 25.0, 10.0]) # m/s², rad/s²
+        self.PANDA_JERK_LIM_CARTESIAN = np.array([6500.0, 6500.0, 6500.0, 12500.0, 12500.0, 12500.0, 5000.0]) # m/s³, rad/s³
 
     def calculate_cartesian_pose_trajectory(self,
                        se3_start : SE3,
                        se3_target: SE3,
                        relative_vel_factor : float=0.02,
                        relative_acc_factor : float=0.01,
-                       relative_jerk_factor: float=0.05) -> Tuple[List[List], float]:
+                       relative_jerk_factor: float=0.05) -> tuple[list[list], float]:
         """ Interpolates and creates a smooth cartesian trajectory (smooth vel, acc, jerk maybe)
         starting from se3_start and ending at se3_target. The trajectory also follows
         the given cartesian constraints: relative_vel_factor, relative_acc_factor, and relative_jerk_factor
         which implicitly converts to a joint constraint :).
+
+        The rotation vector's components are interpolated linearly, which only
+        follows a rotation about a fixed axis when the start and target
+        orientations are close. Plan a large reorientation as several short moves.
 
         Parameters
         ----------
@@ -116,7 +128,7 @@ class RuckigMotionGenerator:
 
         Returns
         ----------
-        cartesian_pose_traj: List[List]
+        cartesian_pose_traj: list[list]
             List of a List: [[x, y, z, rx, ry, rz, elbow_angle], ... ].
             Cartesian pose trajectory of the end effector, from se3_start (at time 0)
             to se3_target.
@@ -127,6 +139,8 @@ class RuckigMotionGenerator:
         RV_start    = se3_to_rotation_vector(se3_start)
         RV_target   = se3_to_rotation_vector(se3_target)
 
+        # Interpolate the mapped rx (see normalize_rx_angle); the mapping is
+        # undone in cartesian_pose_to_joint_trajectory.
         N_RV_start  = normalize_rx_angle(RV_start)
         N_RV_target = normalize_rx_angle(RV_target)
 
@@ -155,7 +169,7 @@ class RuckigMotionGenerator:
             out.pass_to_input(inp)
         return cartesian_pose_traj, self.dt
 
-    def cartesian_pose_to_joint_trajectory(self, model, q_start: np.ndarray, cartesian_pose_traj: List[List]) -> List[np.ndarray]:
+    def cartesian_pose_to_joint_trajectory(self, model, q_start: np.ndarray, cartesian_pose_traj: list[list]) -> list[np.ndarray]:
         """ Converts the cartesian pose trajectory to a joint trajectory using inverse kinematics
         from the model.
 
@@ -166,13 +180,13 @@ class RuckigMotionGenerator:
         q_start : np.ndarray
             The robot's current joint positions to determine redundant solutions in the IK.
             The size is joint_dof of robot.
-        cartesian_pose_traj:  List[List]
+        cartesian_pose_traj:  list[list]
             List of a List: [[x, y, z, rx, ry, rz, elbow_angle], ... ].
             Cartesian pose trajectory of the end effector.
 
         Returns
         ----------
-        q_traj: List[np.ndarray]
+        q_traj: list[np.ndarray]
             List of np.ndarray of joint positions with size of joint_dof of robot.
 
         Raises
@@ -184,6 +198,7 @@ class RuckigMotionGenerator:
         q_current = copy.deepcopy(q_start)
         q_traj = []
         for cartesian_pose in cartesian_pose_traj:
+            # normalize_rx_angle here undoes the mapping the trajectory was planned in.
             q_current = rotation_vector_to_joint_config(
                 model, q_current, normalize_rx_angle(cartesian_pose)) # convert to joint traj
             q_traj.append(q_current)
