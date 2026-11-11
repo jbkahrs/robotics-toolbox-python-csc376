@@ -9,7 +9,7 @@ and the station's miniPC runs it on the robot.
  ┌─────────────────────────────────┐   TCP 7376   ┌──────────────────────────────┐ FCI ┌──────────────┐
  │ your script or notebook         │ trajectories │ csc376-robot-server          │     │              │
  │  csc376_franky.motion_generator │ ───────────▶ │  checks every trajectory     │ ──▶ │ 1 kHz torque │
- │  csc376_franky.vizualizer       │              │  1 kHz joint impedance       │     │ control      │
+ │  csc376_franky.visualizer       │              │  1 kHz joint impedance       │     │ control      │
  │  FrankaJointTrajectoryController│ ◀─────────── │  one trajectory at a time    │ ◀── │              │
  │                                 │ state, 50 Hz │  PREEMPT_RT, libfranka 0.9.2 │     │ Franka Hand  │
  └─────────────────────────────────┘              └──────────────────────────────┘     └──────────────┘
@@ -36,24 +36,28 @@ from spatialmath import SE3
 
 from csc376_franky import FrankaJointTrajectoryController
 from csc376_franky.motion_generator import RuckigMotionGenerator
-from csc376_franky.vizualizer import RtbVisualizer
+from csc376_franky.visualizer import RtbVisualizer
 
-robot = FrankaJointTrajectoryController()    # the robot server on this station's miniPC
+robot = FrankaJointTrajectoryController()  # the robot server on this station's miniPC
 panda = rtb.models.Panda()
 motion_generator = RuckigMotionGenerator()
 
 q_start = robot.get_current_joint_positions()
 se3_start = panda.fkine(q_start)
-se3_target = SE3.Ty(0.1) * se3_start         # 10 cm along the base y axis
+se3_target = SE3.Ty(0.1) * se3_start  # 10 cm along the base y axis
 
-cartesian_traj, dt = motion_generator.calculate_cartesian_pose_trajectory(se3_start, se3_target)
-q_traj = motion_generator.cartesian_pose_to_joint_trajectory(panda, q_start, cartesian_traj)
+cartesian_traj, dt = motion_generator.calculate_cartesian_pose_trajectory(
+    se3_start, se3_target
+)
+q_traj = motion_generator.cartesian_pose_to_joint_trajectory(
+    panda, q_start, cartesian_traj
+)
 
-visualizer = RtbVisualizer(panda, q_start, real_robot=robot)   # see the plan first
+visualizer = RtbVisualizer(panda, q_start, real_robot=robot)  # see the plan first
 visualizer.run_joint_trajectory(q_traj, dt)
 
-robot.run_joint_trajectory(q_traj, dt)       # then run it on the robot
-robot.move_gripper(0.0)                       # close the gripper
+robot.run_joint_trajectory(q_traj, dt)  # then run it on the robot
+robot.move_gripper(0.0)  # close the gripper
 ```
 
 `examples/` has the scripts from the practical, ported:
@@ -111,6 +115,7 @@ to change, unless all of these hold (the defaults are set on the miniPC, see
 | Every point is inside the joint limits | 0.01 rad margin | `JointLimitsExceeded` |
 | No joint jumps between consecutive points (an IK solution flipping) | 0.025 rad | `JointDistancesAboveMaxJointDifference` |
 | No joint moves faster than a fraction of its limit | 0.3 × (2.175 / 2.61 rad/s) | `JointVelocitiesAboveMaximumAllowed` |
+| No joint's velocity changes abruptly from one segment to the next | 1.0 × (15 / 7.5 / 10 / 12.5 / 15 / 20 / 20 rad/s²) | `JointAccelerationsAboveMaximumAllowed` |
 | Sensible timing | 1 ms ≤ dt ≤ 1 s, ≤ 600 s, ≤ 120 000 points | `DtIs...`, `TrajectoryTooLong` |
 | While moving, every joint stays near its command | 0.05 rad | `TrackingErrorTooLarge` (the motion stops) |
 
@@ -120,8 +125,17 @@ Between the points of a trajectory the miniPC interpolates at 1 kHz. A small gap
 between the first point and the robot (within the tolerance) is blended out over
 0.25 s, so the robot never jumps at the start.
 
+The velocity check compares consecutive points, and the acceleration check compares
+consecutive segments: the change of a joint's step from one segment to the next,
+divided by dt². A trajectory from Ruckig passes easily. One that reverses or turns a
+corner at a single point may not: spread the change of velocity over several points.
+The first and last segments are not compared with rest, so a constant-velocity
+trajectory (`np.linspace` between two joint positions) is accepted as before.
+
 **Stopping.** `robot.stop()` and Ctrl+C slow the robot to rest *along its path* within
-0.5 s. Any client can stop any trajectory. The miniPC also stops a trajectory when the
+0.5 s. Any client can stop any trajectory. `stop()` returns whether there was one to
+stop; a stop that comes too late to end the trajectory short of its last point does
+not interrupt it, and `run_joint_trajectory` returns `ErrorCodes.Success`. The miniPC also stops a trajectory when the
 program that started it disconnects or has not been heard from for 2 s. The user stop
 on the robot always works and does not depend on any of this.
 
@@ -153,6 +167,14 @@ on the robot always works and does not depend on any of this.
 | IK failures silently gave wrong joint positions | `RuntimeError` |
 | numpy 1.26.4, websockets 13 and the swift-csc376 fork | The course toolbox fork (1.4.2) and Swift 2 |
 | An exception in the 1 kHz loop killed the program | The miniPC reports it; `recover()` clears a reflex |
+| Joint speed limit 0.3 × (3.0 ×3, 2.5 ×3, 2.62) rad/s | 0.3 × the datasheet's (2.175 ×4, 2.61 ×3) rad/s: 0.65 instead of 0.9 rad/s on joints 1 to 3, 0.65 instead of 0.75 rad/s on joint 4 |
+| dt of at least 0.01 s | dt of at least 0.001 s |
+| No acceleration check | The velocity may not change abruptly between segments (see above) |
+| The planner's Cartesian limits were 3.0 m/s, 9 m/s², 4500 m/s³ | The datasheet's 1.7 m/s, 13 m/s², 6500 m/s³ (rotation 2.5 rad/s, 25 rad/s², 12 500 rad/s³), so the same `relative_vel_factor` plans a slower move |
+| `csc376_franky.vizualizer`, `RobotWrapper.vizualizer` | `csc376_franky.visualizer`, `RobotWrapper.visualizer` (the old names still work) |
+
+A trajectory that the old controller accepted can be refused now: the speed limit on
+joints 1 to 4 is lower, and the acceleration check is new.
 
 `get_current_robot_state()` keeps the old field names (`q`, `dq`, `O_T_EE`, ...),
 and the old methods `setupSignalHandler()` and `join()` still exist (they do nothing).
@@ -171,9 +193,8 @@ CSC376_ROBOT_HOST=127.0.0.1 python examples/sim_or_real_trajectory_with_wrapper.
 
 The motion generator and the Swift visualizer are mostly Patrick Yao's
 (`Patrick15Yao/franky_toolbox_bridge`, no longer online).
-The joint trajectory controller is from [radiang/csc376](https://github.com/radiang/csc376).
+The joint trajectory controller is from [radiang/csc376](https://github.com/radiang/csc376),
+used with its author's permission. The `MotionGenerator` behind `move_home` is a port
+of the one in libfranka's examples (Apache License 2.0).
 
-`server/src/motion_generator.cpp` and `server/include/csc376_franky/motion_generator.hpp`
-are a port of the `MotionGenerator` in libfranka's `examples/examples_common.cpp`,
-Copyright (c) 2017 Franka Emika GmbH, licensed under the
-[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+[`LICENSE`](LICENSE) and [`NOTICE`](NOTICE) have the licence and the details.

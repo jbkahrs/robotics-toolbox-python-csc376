@@ -20,3 +20,5 @@ works on any Linux or macOS machine with a C++17 compiler:
 pip install .. .                                # from this directory: the protocol, then the server
 python -m csc376_franky_server --sim --bind 127.0.0.1
 ```
+
+The tests (`python -m pytest` one directory up) run against this simulated robot.

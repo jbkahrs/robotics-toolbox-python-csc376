@@ -1,0 +1,32 @@
+CSC376 robot interface
+
+This folder is released under the MIT License (see LICENSE), except for the
+parts listed below, which come from other projects.
+
+libfranka
+---------
+server/src/motion_generator.cpp and
+server/include/csc376_franky/motion_generator.hpp are a port of the
+MotionGenerator in libfranka's examples/examples_common.cpp and
+examples/examples_common.h (https://github.com/frankaemika/libfranka).
+
+    Copyright (c) 2017 Franka Emika GmbH
+    Licensed under the Apache License, Version 2.0:
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Changes from the original: Eigen is replaced by plain arrays, and the generator
+is evaluated as a function of time instead of being called as a libfranka
+motion generator.
+
+radiang/csc376
+--------------
+The joint impedance gains, the collision thresholds and the trajectory checks
+of the robot server come from the joint trajectory controller in
+https://github.com/radiang/csc376, used and adapted here with its author's
+permission.
+
+franky_toolbox_bridge
+---------------------
+csc376_franky/motion_generator.py and csc376_franky/visualizer.py are based on
+Patrick Yao's franky_toolbox_bridge (GitHub: Patrick15Yao), which is no longer
+online.
