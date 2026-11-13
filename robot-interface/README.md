@@ -26,6 +26,9 @@ Both GPU PCs of a station can work at the same time. Each one sees the robot's
 state, so each can plan and preview from where the robot actually is. The robot
 runs one trajectory at a time.
 
+The full documentation, with the API reference, is [`docs.html`](docs.html) in this
+folder. GitHub shows it as source: open your copy of the file in a browser.
+
 ## Quick start
 
 On a station's GPU PC, with FCI active in Desk and the user stop in reach:

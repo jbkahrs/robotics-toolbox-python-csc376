@@ -98,7 +98,6 @@ html_theme = "sphinx_rtd_theme"
 html_theme_options = {
     "logo_only": False,
     "prev_next_buttons_location": "None",
-    "analytics_id": "G-11Q6WJM565",
     "style_external_links": False,
     "navigation_depth": 5,
 }
