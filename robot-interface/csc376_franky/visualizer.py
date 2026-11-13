@@ -125,9 +125,9 @@ class RtbVisualizer:
         Parameters
         ----------
         target_width: float
-            Target width of the Franka gripper.
+            Target width of the Franka gripper [m].
         speed: float
-            Delay to when the gripper finishes moving
+            Speed of the fingers [m/s]. Sets how long the move waits before it returns.
         """
         # TODO: the fingers jump to the target width, then this waits for as long
         # as the real gripper would take to get there.
@@ -179,8 +179,8 @@ class RtbVisualizer:
         -----------
         q_trajectory: list[np.ndarray]
             List of np.ndarray of joint positions with size of joint_dof of robot.
-        self.dt: float
-            Delta time between trajectory points of the cartsian_pose_traj.
+        dt: float
+            Delta time between trajectory points of the q_trajectory.
         """
         for i, q in enumerate(q_trajectory):
             self.handle.q = np.array(q, dtype=float)
