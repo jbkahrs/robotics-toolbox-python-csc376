@@ -1,7 +1,7 @@
 """Run the CSC376 robot server: python -m csc376_franky_server [options]
 
 On a station's miniPC this normally runs as the csc376-robot-server systemd
-service (see deploy/). With --sim it drives a simulated robot instead, on any
+service. With --sim it drives a simulated robot instead, on any
 machine, which is how to try the clients without a robot.
 """
 
@@ -187,7 +187,7 @@ def main(argv=None):
         if not _control.HAS_LIBFRANKA:
             sys.exit(
                 "error: this build has no libfranka, so it can only run with --sim. "
-                "Build it on the miniPC; see server/README.md"
+                "The miniPCs' build has it: the course staff install that one."
             )
         if not args.no_realtime:
             check_realtime()

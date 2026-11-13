@@ -10,6 +10,10 @@ talks to the robot. It executes the trajectories that the station's GPU PCs plan
 * `csc376_franky_server/`: the Python server around it. One TCP session per client,
   JSON lines (`csc376_franky/protocol.py` describes the messages).
 
+In the lab it is already installed and running on every station's miniPC: there is
+nothing to set up. What you can do with this folder is run the server with a
+simulated robot, to try your programs without one.
+
 ## Without a robot
 
 `--sim` drives a simulated robot and gripper instead (`--sim-speed 4` runs four times
@@ -21,4 +25,8 @@ pip install .. .                                # from this directory: the proto
 python -m csc376_franky_server --sim --bind 127.0.0.1
 ```
 
-The tests (`python -m pytest` one directory up) run against this simulated robot.
+Then point your program at it, for example from the directory above this one:
+
+```bash
+CSC376_ROBOT_HOST=127.0.0.1 python examples/sim_or_real_trajectory_with_wrapper.py
+```

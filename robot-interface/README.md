@@ -104,8 +104,7 @@ environment variables `CSC376_ROBOT_HOST` and `CSC376_ROBOT_PORT`, change it.
 ## What the miniPC checks
 
 The miniPC never trusts a trajectory. It refuses one, with a message saying what
-to change, unless all of these hold (the defaults are set on the miniPC, see
-`server/README.md`):
+to change, unless all of these hold (the defaults are set on the miniPC):
 
 | Check | Default | `ErrorCodes` when it fails |
 |---|---|---|
