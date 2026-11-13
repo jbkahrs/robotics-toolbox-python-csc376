@@ -15,3 +15,4 @@ Robotics Toolbox for Python
    arm
    mobile
    blocks
+   robot-interface

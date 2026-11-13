@@ -30,6 +30,10 @@ with open(os.path.join(_root, "pyproject.toml"), encoding="utf-8") as f:
     m = re.search(r'^version\s*=\s*"([0-9.]*)"', pyproject_src, re.MULTILINE)
     version = m.group(1) if m else "unknown"
 
+# The CSC376 robot interface (robot-interface.rst) is not installed with the
+# toolbox, so autodoc imports csc376_franky from its folder in this repository
+sys.path.append(os.path.join(_root, "robot-interface"))
+
 # -------- General configuration -----------------------------------------------------#
 
 # Add any Sphinx extension module names here, as strings. They can be
@@ -62,6 +66,9 @@ bibtex_bibfiles = ["refs.bib"]
 
 autosummary_generate = True
 autodoc_member_order = "bysource"
+# csc376_franky's planner and visualizer import these at module level; neither
+# is among the docs dependencies
+autodoc_mock_imports = ["ruckig", "swift"]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]

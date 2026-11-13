@@ -4,6 +4,10 @@
 
 This repository is a course-specific fork of Peter Corke’s Robotics Toolbox for Python. It is maintained solely for use in CSC376 at the University of Toronto. It includes modifications to simplify installation, ensure compatibility with the course software stack, and support course examples. For the official project, see the upstream repository: https://github.com/petercorke/robotics-toolbox-python
 
+### Robot interface
+
+[`robot-interface/`](robot-interface/README.md) holds `csc376_franky`, the Python interface to the teaching lab's Franka Emika Panda robots: plan and preview a trajectory with the toolbox, then run it on a station's robot. The dev container installs it; elsewhere, `pip install -e "./robot-interface[planning]"` after installing the toolbox.
+
 <div align="center">
   <img src="https://raw.githubusercontent.com/petercorke/robotics-toolbox-python/main/docs/figs/RobToolBox_RoundLogoB.png" width="390">
   <br>

@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "csc376-franky"
+dynamic = ["version"]
+description = "CSC376 robot interface: plan and preview on a GPU PC, execute on the station's Panda through its miniPC"
+readme = "README.md"
+requires-python = ">=3.10"
+# Not the toolbox: the planner and the visualizer use the course fork's, which
+# its dev container and the lab's csc376 environment install, and the miniPC's
+# server needs only the client and the wire protocol.
+dependencies = ["numpy"]
+
+[project.optional-dependencies]
+# Planning and visualization anywhere else; install the course fork of the
+# toolbox (robotics-toolbox-python-csc376) first.
+planning = [
+    "roboticstoolbox-python>=1.4.2",
+    "spatialmath-python>=1.1.16",
+    "scipy",
+    "ruckig",
+    # The visualizer closes Swift through internals that 2.0.0 and 2.1.0 have.
+    "swift-sim>=2.0,<3",
+]
+test = ["pytest>=7"]
+
+[tool.hatch.version]
+path = "csc376_franky/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["csc376_franky"]
+
+# The examples, for whoever has the package but not this repository (the lab's
+# shared environment): <environment>/share/csc376_franky/examples
+[tool.hatch.build.targets.wheel.shared-data]
+"examples" = "share/csc376_franky/examples"
+
+[tool.hatch.build.targets.sdist]
+include = ["/csc376_franky", "/examples", "/tests", "/README.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+# Lint and format like the toolbox, with this folder's packages as first-party.
+[tool.ruff]
+extend = "../pyproject.toml"
+
+[tool.ruff.lint]
+# Deliberate: errors are passed on to a future, or reported without ending the
+# render thread; and protocol.decode documents ValueError.
+extend-ignore = ["BLE001", "TRY004"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["csc376_franky", "csc376_franky_server", "helpers"]
+known-third-party = ["roboticstoolbox"]

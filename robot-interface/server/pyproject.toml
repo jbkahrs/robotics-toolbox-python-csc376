@@ -1,0 +1,25 @@
+[build-system]
+requires = ["scikit-build-core>=0.9", "pybind11>=2.12"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "csc376-franky-server"
+dynamic = ["version"]
+description = "CSC376 robot server: runs on a station's miniPC and executes trajectories planned on its GPU PCs"
+readme = "README.md"
+requires-python = ">=3.10"
+# csc376-franky (the directory above this one) supplies the wire protocol.
+dependencies = ["numpy", "csc376-franky"]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+csc376-robot-server = "csc376_franky_server.__main__:main"
+
+[tool.scikit-build]
+minimum-version = "0.9"
+metadata.version.provider = "scikit_build_core.metadata.regex"
+metadata.version.input = "csc376_franky_server/__init__.py"
+wheel.packages = ["csc376_franky_server"]
+cmake.build-type = "Release"

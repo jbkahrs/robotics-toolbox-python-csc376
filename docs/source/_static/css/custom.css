@@ -29,3 +29,10 @@ div[role="contentinfo"] p {
 .footer-github-link {
     font-size: 0.85em;
 }
+
+/* Tables marked ":class: wrap-literals" break long inline code instead of
+   growing wider than the page. */
+.rst-content table.docutils.wrap-literals code.literal {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
