@@ -190,7 +190,7 @@ py::dict snapshotDict(const Controller::Snapshot& s)
     }
     py::list results;
     for (const auto& r : s.results)
-        results.append(py::make_tuple(r.id, static_cast<int>(r.code), r.message));
+        results.append(py::make_tuple(r.id, static_cast<int>(r.code), r.message, r.log_file));
     d["results"] = results;
     return d;
 }
@@ -277,6 +277,7 @@ PYBIND11_MODULE(_control, m)
         .def_readwrite("settle_timeout", &Limits::settle_timeout)
         .def_readwrite("stiffness", &Limits::stiffness)
         .def_readwrite("damping", &Limits::damping)
+        .def_readwrite("joint_impedance", &Limits::joint_impedance)
         .def_readwrite("servo_linear_velocity", &Limits::servo_linear_velocity)
         .def_readwrite("servo_angular_velocity", &Limits::servo_angular_velocity)
         .def_readwrite("servo_ramp_time", &Limits::servo_ramp_time)
@@ -358,22 +359,43 @@ PYBIND11_MODULE(_control, m)
             "t"_a, "(finished, joint positions) t seconds after the start")
         .def_property_readonly("duration", &JointMotionGenerator::duration);
 
+    py::class_<MotionLog, std::shared_ptr<MotionLog>>(
+        m, "MotionLog",
+        "Records every control cycle of every motion to a CSV file of its own, for tuning the controller")
+        .def(py::init([](const std::string& directory, std::uintmax_t max_bytes, const std::string& preamble) {
+                 return std::make_shared<MotionLog>(directory, max_bytes, preamble);
+             }),
+             "directory"_a, "max_bytes"_a, "preamble"_a = "",
+             "Log into directory, removing the oldest files once they take more than max_bytes together; "
+             "preamble is '# ' lines for the head of every file")
+        .def_property_readonly("directory", [](const MotionLog& log) { return log.directory().string(); })
+        .def_property_readonly(
+            "error", [](const MotionLog& log) { return textOrNone(log.error()); },
+            "What last went wrong writing, or None")
+        .def_property_readonly("files", &MotionLog::files, "Files finished since the start")
+        .def_property_readonly("dropped", &MotionLog::dropped, "Samples dropped since the start")
+        .def("shutdown", &MotionLog::shutdown, py::call_guard<py::gil_scoped_release>(),
+             "Write what is queued and end the log's thread");
+
     py::class_<Controller>(m, "Controller")
         .def_static(
             "sim",
-            [](const Limits& limits, const Vec7& q_start, double speed) {
-                return std::make_unique<Controller>(makeSimBackend(q_start, speed), limits);
+            [](const Limits& limits, const Vec7& q_start, double speed, std::shared_ptr<MotionLog> log) {
+                return std::make_unique<Controller>(makeSimBackend(q_start, speed), limits, std::move(log));
             },
-            "limits"_a = Limits(), "q_start"_a = kReadyPose, "speed"_a = 1.0,
-            "A controller for a simulated robot; speed > 1 runs faster than real time")
+            "limits"_a = Limits(), "q_start"_a = kReadyPose, "speed"_a = 1.0, "log"_a = py::none(),
+            "A controller for a simulated robot; speed > 1 runs faster than real time. With a MotionLog, "
+            "every motion is recorded there")
 #ifdef CSC376_HAVE_LIBFRANKA
         .def_static(
             "franka",
-            [](const std::string& robot_ip, const Limits& limits, bool enforce_realtime) {
-                return std::make_unique<Controller>(makeFrankaBackend(robot_ip, limits, enforce_realtime), limits);
+            [](const std::string& robot_ip, const Limits& limits, bool enforce_realtime,
+               std::shared_ptr<MotionLog> log) {
+                return std::make_unique<Controller>(makeFrankaBackend(robot_ip, limits, enforce_realtime), limits,
+                                                    std::move(log));
             },
-            "robot_ip"_a, "limits"_a = Limits(), "enforce_realtime"_a = true,
-            "A controller for the robot at robot_ip (FCI)")
+            "robot_ip"_a, "limits"_a = Limits(), "enforce_realtime"_a = true, "log"_a = py::none(),
+            "A controller for the robot at robot_ip (FCI). With a MotionLog, every motion is recorded there")
 #endif
         .def_property_readonly("backend", [](Controller& c) { return c.backend().name(); })
         .def_property_readonly("address", [](Controller& c) { return c.backend().address(); })

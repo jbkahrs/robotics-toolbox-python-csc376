@@ -210,6 +210,8 @@ on the robot always works and does not depend on any of this.
 | Trajectory checks compared signed differences (backward jumps passed) | Absolute differences, plus joint limits |
 | `calculate_cartesian_pose_trajectory` started one step after the start | Starts at the start pose (t = 0) |
 | IK failures silently gave wrong joint positions | `RuntimeError` |
+| The hand's orientation was interpolated as the three components of its rotation vector. Where rx changes sign (a hand pointing down), the plan made the hand jump, and the miniPC refused it whatever the speed factors | The hand turns about one fixed axis, the short way round, from the start orientation to the target's (since 2.4) |
+| A Cartesian trajectory held rx mapped by `normalize_rx_angle` | It holds the rotation vector of each pose itself (since 2.4). Give `cartesian_pose_to_joint_trajectory` poses of your own the same way |
 | numpy 1.26.4, websockets 13 and the swift-csc376 fork | The course toolbox fork (1.4.2) and Swift 2 |
 | An exception in the 1 kHz loop killed the program | The miniPC reports it; `recover()` clears a reflex |
 | Joint speed limit 0.3 × (3.0 ×3, 2.5 ×3, 2.62) rad/s | 0.3 × the datasheet's (2.175 ×4, 2.61 ×3) rad/s: 0.65 instead of 0.9 rad/s on joints 1 to 3, 0.65 instead of 0.75 rad/s on joint 4 |

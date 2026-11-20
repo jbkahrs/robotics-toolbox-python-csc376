@@ -315,7 +315,7 @@ def result_of(controller, controller_id, timeout=10.0):
     def finished():
         found[:] = [
             (ErrorCodes(code), message)
-            for i, code, message in controller.snapshot()["results"]
+            for i, code, message, _ in controller.snapshot()["results"]
             if i == controller_id
         ]
         return bool(found)

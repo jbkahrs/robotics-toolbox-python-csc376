@@ -19,7 +19,9 @@ other FCI programs (Desk tasks, for example) the rest of the time.
 
 import asyncio
 import itertools
+import json
 import logging
+import os
 import socket
 import time
 import uuid
@@ -38,6 +40,51 @@ MONITOR_PERIOD = 0.01
 MAX_STATE_RATE = 100.0
 # Drop state messages, but never replies, for a client that is this far behind.
 MAX_BUFFERED_STATE = 256 * 1024
+
+
+# Every field of the controller's Limits, for the motion log's header.
+LIMIT_NAMES = (
+    "joint_limit_margin",
+    "velocity_scale",
+    "acceleration_scale",
+    "max_joint_step",
+    "start_tolerance",
+    "tracking_error_limit",
+    "min_dt",
+    "max_dt",
+    "max_duration",
+    "max_points",
+    "start_blend_time",
+    "stop_time",
+    "settle_velocity",
+    "settle_timeout",
+    "stiffness",
+    "damping",
+    "joint_impedance",
+    "servo_linear_velocity",
+    "servo_angular_velocity",
+    "servo_ramp_time",
+    "servo_timeout",
+    "servo_joint_limit_margin",
+    "servo_damping",
+    "servo_min_height",
+)
+MOTION_LOG_FORMAT = 1
+
+
+def motion_log_preamble(limits, **server):
+    """The '# ' lines at the head of every motion log: this server and its limits.
+
+    server describes the robot: backend ("franka" or "sim"), robot (its address)
+    and libfranka (its version, or None).
+    """
+    server = {"version": __version__, **server}
+    limits = {name: getattr(limits, name) for name in LIMIT_NAMES}
+    return (
+        f"# csc376_franky_server motion log, format {MOTION_LOG_FORMAT}\n"
+        f"# server: {json.dumps(server)}\n"
+        f"# limits: {json.dumps(limits)}\n"
+    )
 
 
 class RequestError(Exception):
@@ -148,9 +195,13 @@ class RobotServer:
         state_rate=50.0,
         idle_release=30.0,
         owner_timeout=2.0,
+        motion_log=None,
     ):
         self.controller = controller
         self.gripper = gripper
+        # The controller's MotionLog, if it has one, to report its troubles.
+        self.motion_log = motion_log
+        self._last_log_error = None
         self.state_rate = min(float(state_rate), MAX_STATE_RATE)
         self.idle_release = idle_release
         self.owner_timeout = owner_timeout
@@ -207,6 +258,8 @@ class RobotServer:
         await asyncio.to_thread(self.controller.shutdown)
         if self.gripper is not None:
             await asyncio.to_thread(self.gripper.shutdown)
+        if self.motion_log is not None:
+            await asyncio.to_thread(self.motion_log.shutdown)
 
     # ---- connections --------------------------------------------------------
 
@@ -518,7 +571,7 @@ class RobotServer:
         log.info(
             "session %d: error recovery requested by %s", session.id, session.label
         )
-        code, text = await future
+        code, text, _ = await future
         if code != ErrorCodes.Success:
             raise RequestError(code, text)
         return {}
@@ -597,16 +650,17 @@ class RobotServer:
                 controller_id,
                 session.label,
             )
-        code, text = await execution.future
+        code, text, log_file = await execution.future
         if code == ErrorCodes.Interrupted and execution.stopped_by:
             text = f"The {what} was stopped {execution.stopped_by}"
         log.info(
-            "session %d: %s %d: %s%s",
+            "session %d: %s %d: %s%s%s",
             session.id,
             what,
             controller_id,
             code.name,
             f": {text}" if text else "",
+            f" (log: {os.path.basename(log_file)})" if log_file else "",
         )
         if code != ErrorCodes.Success:
             raise RequestError(code, text)
@@ -706,9 +760,14 @@ class RobotServer:
         if error and error != self._last_connection_error:
             log.warning("robot: %s", error)
         self._last_connected, self._last_connection_error = connected, error
+        if self.motion_log is not None:
+            error = self.motion_log.error
+            if error and error != self._last_log_error:
+                log.warning("motion log: %s", error)
+            self._last_log_error = error
 
     def _resolve(self):
-        for controller_id, code, text in self._snapshot["results"]:
+        for controller_id, code, text, log_file in self._snapshot["results"]:
             execution = self._executions.pop(controller_id, None)
             future = (
                 execution.future
@@ -716,7 +775,7 @@ class RobotServer:
                 else self._recoveries.pop(controller_id, None)
             )
             if future is not None and not future.done():
-                future.set_result((ErrorCodes(code), text))
+                future.set_result((ErrorCodes(code), text, log_file))
 
     def _watch_owners(self, now):
         trajectory = self._snapshot["trajectory"]

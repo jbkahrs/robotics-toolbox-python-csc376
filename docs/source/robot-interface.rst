@@ -157,8 +157,9 @@ move of the end effector between two poses, in two steps:
 1. :meth:`~csc376_franky.motion_generator.RuckigMotionGenerator.calculate_cartesian_pose_trajectory`
    interpolates from ``se3_start`` to ``se3_target`` with
    `Ruckig <https://github.com/pantor/ruckig>`_, which limits the velocity,
-   acceleration and jerk. It returns the Cartesian trajectory and the time between
-   its points, ``dt`` (0.01 s).
+   acceleration and jerk. It returns the Cartesian trajectory, whose points are
+   the end effector's position and the rotation vector of its orientation, and
+   the time between them, ``dt`` (0.01 s).
 2. :meth:`~csc376_franky.motion_generator.RuckigMotionGenerator.cartesian_pose_to_joint_trajectory`
    solves the inverse kinematics of every point with the Toolbox, each one starting
    from the solution of the point before it. It returns the joint trajectory that
@@ -191,9 +192,9 @@ Three things to know when planning:
   the miniPC refuses a joint trajectory that does not start at the robot's measured
   joint positions, so take ``q_start`` from
   :meth:`~csc376_franky.FrankaJointTrajectoryController.get_current_joint_positions`.
-- The orientation is interpolated as a rotation vector, component by component.
-  That only follows a rotation about a fixed axis when the start and target
-  orientations are close: plan a large reorientation as several short moves.
+- The end effector turns from the start orientation to the target's about one
+  fixed axis, the short way round, so by at most half a turn. To turn it further,
+  or the long way round, plan two moves.
 - ``cartesian_pose_to_joint_trajectory`` raises ``RuntimeError`` when the inverse
   kinematics finds no solution for a pose, for example a target out of reach.
 
@@ -543,9 +544,19 @@ Troubleshooting
    * - ``JointTrajectoryDoesNotStartAtCurrentPosition``
      - The robot moved since the plan was made: plan again from
        ``get_current_joint_positions()``
+   * - ``JointVelocitiesAboveMaximumAllowed``
+     - A joint would have to move faster than the miniPC allows. Slow the
+       trajectory down (a lower ``relative_vel_factor``). Near a singularity (the
+       arm folded up close to its base, or stretched out) even a slow move of the
+       end effector needs fast joints
    * - ``JointAccelerationsAboveMaximumAllowed``
      - The trajectory changes a joint's velocity too abruptly at one point (a
        reversal, a sharp corner). Spread the change over more points
+   * - Either of the two, or ``JointDistancesAboveMaxJointDifference``, for a plan
+       that turns the end effector, whatever its factors
+     - Before version 2.4, ``csc376_franky`` made the end effector's orientation
+       jump at one point of such a plan. ``csc376_franky.__version__`` says which
+       version a program runs: it needs 2.4 or later
    * - ``TrackingErrorTooLarge``
      - A joint could not follow its command (contact, someone pushed the robot) and
        the motion was stopped

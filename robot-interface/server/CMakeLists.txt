@@ -1,4 +1,9 @@
 cmake_minimum_required(VERSION 3.15...3.31)
+# std::filesystem (the motion log) needs macOS 10.15 or later; conda and
+# cibuildwheel environments often ask for an older target.
+if(APPLE AND (NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET OR CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS 10.15))
+    set(CMAKE_OSX_DEPLOYMENT_TARGET 10.15 CACHE STRING "Minimum macOS version" FORCE)
+endif()
 project(csc376_franky_server LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -25,6 +30,7 @@ pybind11_add_module(_control MODULE
     src/controller.cpp
     src/gripper_controller.cpp
     src/motion_generator.cpp
+    src/motion_log.cpp
     src/sim_backend.cpp
     src/trajectory.cpp
     src/twist_follower.cpp

@@ -33,14 +33,16 @@ class Station:
         return asyncio.run_coroutine_threadsafe(coroutine, self.loop).result(30)
 
 
-def make_station(native, limits=None, gripper=True, **server_options):
+def make_station(native, limits=None, gripper=True, motion_log=None, **server_options):
     from csc376_franky_server.server import RobotServer
 
-    controller = native.Controller.sim(limits or native.Limits(), speed=SIM_SPEED)
+    controller = native.Controller.sim(
+        limits or native.Limits(), speed=SIM_SPEED, log=motion_log
+    )
     gripper = native.GripperController.sim(speed=SIM_SPEED) if gripper else None
     options = {"idle_release": 0.5, "owner_timeout": 0.5}
     options.update(server_options)
-    server = RobotServer(controller, gripper, **options)
+    server = RobotServer(controller, gripper, motion_log=motion_log, **options)
     loop = asyncio.new_event_loop()
     started = threading.Event()
 

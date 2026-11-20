@@ -5,7 +5,7 @@ Plan trajectories (csc376_franky.motion_generator), preview them in Swift
 server on the station's miniPC (FrankaJointTrajectoryController).
 """
 
-__version__ = "2.2.0"
+__version__ = "2.4.0"
 
 from .client import (
     FrankaJointTrajectoryController,

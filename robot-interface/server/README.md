@@ -32,3 +32,9 @@ Then point your program at it, for example from the directory above this one:
 ```bash
 CSC376_ROBOT_HOST=127.0.0.1 python examples/sim_or_real_trajectory_with_wrapper.py
 ```
+
+`--log-dir DIR` records every motion to a CSV file in `DIR` at the control rate
+(time, the measured and commanded joint positions and velocities, torques), which is
+how the course staff tune the controller on the real robots, and a way to look
+closely at how a trajectory of yours is followed. `python -m csc376_franky_server
+--help` lists the other options.
