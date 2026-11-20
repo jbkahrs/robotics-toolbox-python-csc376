@@ -1,4 +1,5 @@
 import copy
+import warnings
 
 import numpy as np
 from ruckig import InputParameter, OutputParameter, Result, Ruckig
@@ -13,15 +14,21 @@ from spatialmath import SE3
 
 def normalize_rx_angle(rv_vector):
     """
-    Map the rx component of the rotation vector so that it is continuous where rx itself jumps.
+    Not used any more, and kept so that programs that import it still run.
 
-    With the hand pointing down, rx is close to pi or to -pi and flips between the
-    two from one pose to the next. The mapped value is close to 0 on both sides, so
-    Ruckig can interpolate it. The mapping is its own inverse:
-    calculate_cartesian_pose_trajectory applies it to the two ends of a move, and
-    cartesian_pose_to_joint_trajectory applies it again to every interpolated pose
-    to get the rotation vector back. Both calls are needed.
+    Maps rx of a pose [x, y, z, rx, ry, rz, elbow] to pi - rx (for rx > 0) or to
+    -pi - rx; the mapping is its own inverse. The motion generator used to plan
+    with rx mapped this way, and its Cartesian trajectories held the mapped rx.
+    Since csc376_franky 2.4 they hold the rotation vector of each pose itself, so
+    give cartesian_pose_to_joint_trajectory poses whose rx is not mapped.
     """
+    warnings.warn(
+        "normalize_rx_angle is not used any more: since csc376_franky 2.4 a "
+        "Cartesian trajectory holds the rotation vector of each pose itself, so "
+        "do not map rx before cartesian_pose_to_joint_trajectory",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     rv_normalized = rv_vector.copy()  # Make a copy to avoid modifying original
     # Apply the rule to the 4th element (index 3)
     rx = rv_normalized[3]
@@ -98,7 +105,8 @@ class RuckigMotionGenerator:
         self.dt = 0.01
         self.ruckig = Ruckig(dofs=7, delta_time=self.dt)
         # The Panda's Cartesian limits from its datasheet, for [x, y, z, rx, ry, rz, elbow]:
-        # translation, rotation and elbow.
+        # translation, rotation and elbow. A move turns the end effector about one
+        # axis, and the smallest of the three rotation limits applies to that turn.
         self.PANDA_VEL_LIM_CARTESIAN = np.array(
             [1.7, 1.7, 1.7, 2.5, 2.5, 2.5, 2.175]
         )  # m/s, rad/s
@@ -122,9 +130,12 @@ class RuckigMotionGenerator:
         the given cartesian constraints: relative_vel_factor, relative_acc_factor, and relative_jerk_factor
         which implicitly converts to a joint constraint :).
 
-        The rotation vector's components are interpolated linearly, which only
-        follows a rotation about a fixed axis when the start and target
-        orientations are close. Plan a large reorientation as several short moves.
+        The end effector goes from the position of se3_start to that of
+        se3_target, and turns from the orientation of se3_start to that of
+        se3_target about one fixed axis, the short way round: by at most half a
+        turn. Where the two orientations are exactly half a turn apart, either
+        way round is as short, and rounding decides which one it takes. The
+        rotation limits apply to the angle turned about that axis.
 
         Parameters
         ----------
@@ -147,45 +158,74 @@ class RuckigMotionGenerator:
         cartesian_pose_traj: list[list]
             List of a List: [[x, y, z, rx, ry, rz, elbow_angle], ... ].
             Cartesian pose trajectory of the end effector, from se3_start (at time 0)
-            to se3_target.
+            to se3_target: its position [m] and the rotation vector of its
+            orientation [rad], in the base frame. A rotation vector is not
+            continuous: where the end effector is half a turn from the base frame
+            (a hand pointing down, for example), it can change sign from one point
+            to the next although the orientation hardly changes.
         self.dt: float
             Delta time between trajectory points of the cartsian_pose_traj.
         """
 
-        RV_start = se3_to_rotation_vector(se3_start)
-        RV_target = se3_to_rotation_vector(se3_target)
+        pose_start = se3_to_rotation_vector(se3_start)
+        pose_target = se3_to_rotation_vector(se3_target)
 
-        # Interpolate the mapped rx (see normalize_rx_angle); the mapping is
-        # undone in cartesian_pose_to_joint_trajectory.
-        N_RV_start = normalize_rx_angle(RV_start)
-        N_RV_target = normalize_rx_angle(RV_target)
+        # The orientation is planned as one number, the angle turned about a fixed
+        # axis: the rotation that takes the start orientation to the target's, in
+        # the base frame. Interpolating the components of the rotation vector
+        # instead makes the orientation jump, because they are not continuous:
+        # with the hand pointing down, rx flips between pi and -pi.
+        rotation_start = Rotation.from_rotvec(pose_start[3:6])
+        turn = (
+            Rotation.from_rotvec(pose_target[3:6]) * rotation_start.inv()
+        ).as_rotvec()
+        angle = np.linalg.norm(turn)
+        axis = turn / angle if angle > 0.0 else turn
 
+        def ruckig_limits(panda_limits, factor):
+            limits = panda_limits * factor
+            limits[3] = limits[3:6].min()  # of the angle, whichever way its axis points
+            return limits
+
+        # Ruckig's degrees of freedom are [x, y, z, angle, unused, unused, elbow].
         inp = InputParameter(7)
         out = OutputParameter(7)
-        inp.current_position = N_RV_start
+        inp.current_position = [*pose_start[:3], 0.0, 0.0, 0.0, pose_start[6]]
         inp.current_velocity = [0, 0, 0, 0, 0, 0, 0]
         inp.current_acceleration = [0, 0, 0, 0, 0, 0, 0]
-        inp.target_position = N_RV_target
+        inp.target_position = [*pose_target[:3], angle, 0.0, 0.0, pose_target[6]]
         inp.target_velocity = [0, 0, 0, 0, 0, 0, 0]
         inp.target_acceleration = [0, 0, 0, 0, 0, 0, 0]
-        inp.max_velocity = self.PANDA_VEL_LIM_CARTESIAN * relative_vel_factor
-        inp.max_acceleration = self.PANDA_ACC_LIM_CARTESIAN * relative_acc_factor
-        inp.max_jerk = self.PANDA_JERK_LIM_CARTESIAN * relative_jerk_factor
+        inp.max_velocity = ruckig_limits(
+            self.PANDA_VEL_LIM_CARTESIAN, relative_vel_factor
+        )
+        inp.max_acceleration = ruckig_limits(
+            self.PANDA_ACC_LIM_CARTESIAN, relative_acc_factor
+        )
+        inp.max_jerk = ruckig_limits(
+            self.PANDA_JERK_LIM_CARTESIAN, relative_jerk_factor
+        )
         inp.enabled = [True, True, True, True, True, True, True]
         res = Result.Working
 
-        # Start at the start pose itself, so the joint trajectory starts exactly
-        # where the robot is (the miniPC refuses one that does not).
-        cartesian_pose_traj = [list(N_RV_start)]
+        positions = [inp.current_position]
         while res == Result.Working:
             res = self.ruckig.update(
                 inp, out
             )  # interpolates to robot vel, acc, and jerk constraints
             if res not in (Result.Working, Result.Finished):
                 raise RuntimeError(f"Ruckig could not plan the trajectory: {res}")
-            cartesian_pose_traj.append(out.new_position)
+            positions.append(out.new_position)
             out.pass_to_input(inp)
-        return cartesian_pose_traj, self.dt
+
+        # The orientation of each point is the start orientation turned by its angle.
+        poses = np.array(positions)
+        rotations = Rotation.from_rotvec(np.outer(poses[:, 3], axis)) * rotation_start
+        poses[:, 3:6] = rotations.as_rotvec()
+        # Start at the start pose itself, so the joint trajectory starts exactly
+        # where the robot is (the miniPC refuses one that does not).
+        poses[0] = pose_start
+        return poses.tolist(), self.dt
 
     def cartesian_pose_to_joint_trajectory(
         self, model, q_start: np.ndarray, cartesian_pose_traj: list[list]
@@ -202,7 +242,9 @@ class RuckigMotionGenerator:
             The size is joint_dof of robot.
         cartesian_pose_traj:  list[list]
             List of a List: [[x, y, z, rx, ry, rz, elbow_angle], ... ].
-            Cartesian pose trajectory of the end effector.
+            Cartesian pose trajectory of the end effector: its position [m] and
+            the rotation vector of its orientation [rad], in the base frame, as
+            calculate_cartesian_pose_trajectory returns it.
 
         Returns
         ----------
@@ -218,9 +260,8 @@ class RuckigMotionGenerator:
         q_current = copy.deepcopy(q_start)
         q_traj = []
         for cartesian_pose in cartesian_pose_traj:
-            # normalize_rx_angle here undoes the mapping the trajectory was planned in.
             q_current = rotation_vector_to_joint_config(
-                model, q_current, normalize_rx_angle(cartesian_pose)
+                model, q_current, cartesian_pose
             )  # convert to joint traj
             q_traj.append(q_current)
         return q_traj

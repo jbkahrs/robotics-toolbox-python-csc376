@@ -1058,6 +1058,7 @@ runWhenDOMLoaded(addCopyButtonToCodeCells)
 <li><a class="reference internal" href="#running-a-trajectory">Running a trajectory</a></li>
 <li><a class="reference internal" href="#stopping">Stopping</a></li>
 <li><a class="reference internal" href="#moving-home">Moving home</a></li>
+<li><a class="reference internal" href="#velocity-control">Velocity control</a></li>
 <li><a class="reference internal" href="#the-gripper">The gripper</a></li>
 </ul>
 </li>
@@ -1079,11 +1080,21 @@ runWhenDOMLoaded(addCopyButtonToCodeCells)
 <li><a class="reference internal" href="#csc376_franky.FrankaJointTrajectoryController.set_trajectory_callback"><code class="docutils literal notranslate"><span class="pre">FrankaJointTrajectoryController.set_trajectory_callback()</span></code></a></li>
 <li><a class="reference internal" href="#csc376_franky.FrankaJointTrajectoryController.run_joint_trajectory"><code class="docutils literal notranslate"><span class="pre">FrankaJointTrajectoryController.run_joint_trajectory()</span></code></a></li>
 <li><a class="reference internal" href="#csc376_franky.FrankaJointTrajectoryController.move_home"><code class="docutils literal notranslate"><span class="pre">FrankaJointTrajectoryController.move_home()</span></code></a></li>
+<li><a class="reference internal" href="#csc376_franky.FrankaJointTrajectoryController.start_servo"><code class="docutils literal notranslate"><span class="pre">FrankaJointTrajectoryController.start_servo()</span></code></a></li>
 <li><a class="reference internal" href="#csc376_franky.FrankaJointTrajectoryController.stop"><code class="docutils literal notranslate"><span class="pre">FrankaJointTrajectoryController.stop()</span></code></a></li>
 <li><a class="reference internal" href="#csc376_franky.FrankaJointTrajectoryController.recover"><code class="docutils literal notranslate"><span class="pre">FrankaJointTrajectoryController.recover()</span></code></a></li>
 <li><a class="reference internal" href="#csc376_franky.FrankaJointTrajectoryController.move_gripper"><code class="docutils literal notranslate"><span class="pre">FrankaJointTrajectoryController.move_gripper()</span></code></a></li>
 <li><a class="reference internal" href="#csc376_franky.FrankaJointTrajectoryController.setupSignalHandler"><code class="docutils literal notranslate"><span class="pre">FrankaJointTrajectoryController.setupSignalHandler()</span></code></a></li>
 <li><a class="reference internal" href="#csc376_franky.FrankaJointTrajectoryController.join"><code class="docutils literal notranslate"><span class="pre">FrankaJointTrajectoryController.join()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#csc376_franky.Servo"><code class="docutils literal notranslate"><span class="pre">Servo</span></code></a><ul>
+<li><a class="reference internal" href="#csc376_franky.Servo.active"><code class="docutils literal notranslate"><span class="pre">Servo.active</span></code></a></li>
+<li><a class="reference internal" href="#csc376_franky.Servo.error"><code class="docutils literal notranslate"><span class="pre">Servo.error</span></code></a></li>
+<li><a class="reference internal" href="#csc376_franky.Servo.status"><code class="docutils literal notranslate"><span class="pre">Servo.status</span></code></a></li>
+<li><a class="reference internal" href="#csc376_franky.Servo.limited"><code class="docutils literal notranslate"><span class="pre">Servo.limited</span></code></a></li>
+<li><a class="reference internal" href="#csc376_franky.Servo.set_twist"><code class="docutils literal notranslate"><span class="pre">Servo.set_twist()</span></code></a></li>
+<li><a class="reference internal" href="#csc376_franky.Servo.stop"><code class="docutils literal notranslate"><span class="pre">Servo.stop()</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#csc376_franky.Gripper"><code class="docutils literal notranslate"><span class="pre">Gripper</span></code></a><ul>
@@ -1252,7 +1263,9 @@ previews in Swift, and talks to the miniPC. It needs no libfranka, no real-time
 kernel and no compiler, so it runs on any lab PC.</p></li>
 <li><p><strong>miniPC</strong>: the robot server (<code class="docutils literal notranslate"><span class="pre">robot-interface/server/</span></code>). It is the only program
 that talks to the robot. It checks every trajectory, runs a joint impedance
-controller at 1 kHz, and sends the robot’s state to the GPU PCs.</p></li>
+controller at 1 kHz, and sends the robot’s state to the GPU PCs. It can also make
+the robot follow a velocity that a GPU PC streams to it
+(see <a class="reference internal" href="#robot-interface-servo"><span class="std std-ref">Velocity control</span></a>).</p></li>
 </ul>
 <p>Both GPU PCs of a station can work at the same time. Each one sees the robot’s
 state, so each can plan and preview from where the robot actually is. The robot
@@ -1351,6 +1364,10 @@ environment variables <code class="docutils literal notranslate"><span class="pr
 <td><p>Moves the robot to libfranka’s home pose after you type <code class="docutils literal notranslate"><span class="pre">yes</span></code>
 (see <a class="reference internal" href="#robot-interface-home"><span class="std std-ref">Moving home</span></a>)</p></td>
 </tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">velocity_control.py</span></code></p></td>
+<td><p>Moves the hand 3 cm up under velocity control after you type <code class="docutils literal notranslate"><span class="pre">yes</span></code>
+(see <a class="reference internal" href="#robot-interface-servo"><span class="std std-ref">Velocity control</span></a>)</p></td>
+</tr>
 </tbody>
 </table>
 </section>
@@ -1364,8 +1381,9 @@ move of the end effector between two poses, in two steps:</p>
 <li><p><a class="reference internal" href="#csc376_franky.motion_generator.RuckigMotionGenerator.calculate_cartesian_pose_trajectory" title="csc376_franky.motion_generator.RuckigMotionGenerator.calculate_cartesian_pose_trajectory"><code class="xref py py-meth docutils literal notranslate"><span class="pre">calculate_cartesian_pose_trajectory()</span></code></a>
 interpolates from <code class="docutils literal notranslate"><span class="pre">se3_start</span></code> to <code class="docutils literal notranslate"><span class="pre">se3_target</span></code> with
 <a class="reference external" href="https://github.com/pantor/ruckig">Ruckig</a>, which limits the velocity,
-acceleration and jerk. It returns the Cartesian trajectory and the time between
-its points, <code class="docutils literal notranslate"><span class="pre">dt</span></code> (0.01 s).</p></li>
+acceleration and jerk. It returns the Cartesian trajectory, whose points are
+the end effector’s position and the rotation vector of its orientation, and
+the time between them, <code class="docutils literal notranslate"><span class="pre">dt</span></code> (0.01 s).</p></li>
 <li><p><a class="reference internal" href="#csc376_franky.motion_generator.RuckigMotionGenerator.cartesian_pose_to_joint_trajectory" title="csc376_franky.motion_generator.RuckigMotionGenerator.cartesian_pose_to_joint_trajectory"><code class="xref py py-meth docutils literal notranslate"><span class="pre">cartesian_pose_to_joint_trajectory()</span></code></a>
 solves the inverse kinematics of every point with the Toolbox, each one starting
 from the solution of the point before it. It returns the joint trajectory that
@@ -1406,9 +1424,9 @@ Cartesian limits from its datasheet, for translation and for rotation:</p>
 the miniPC refuses a joint trajectory that does not start at the robot’s measured
 joint positions, so take <code class="docutils literal notranslate"><span class="pre">q_start</span></code> from
 <a class="reference internal" href="#csc376_franky.FrankaJointTrajectoryController.get_current_joint_positions" title="csc376_franky.FrankaJointTrajectoryController.get_current_joint_positions"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_current_joint_positions()</span></code></a>.</p></li>
-<li><p>The orientation is interpolated as a rotation vector, component by component.
-That only follows a rotation about a fixed axis when the start and target
-orientations are close: plan a large reorientation as several short moves.</p></li>
+<li><p>The end effector turns from the start orientation to the target’s about one
+fixed axis, the short way round, so by at most half a turn. To turn it further,
+or the long way round, plan two moves.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">cartesian_pose_to_joint_trajectory</span></code> raises <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> when the inverse
 kinematics finds no solution for a pose, for example a target out of reach.</p></li>
 </ul>
@@ -1537,6 +1555,80 @@ is clear first.</p>
 <p><code class="docutils literal notranslate"><span class="pre">speed_factor</span></code> (0.2 by default) can be at most the miniPC’s velocity scale, 0.3.
 <code class="docutils literal notranslate"><span class="pre">stop()</span></code>, Ctrl+C and the miniPC’s other checks work as they do for a trajectory.</p>
 </section>
+<section id="velocity-control">
+<span id="robot-interface-servo"></span><h3>Velocity control<a class="headerlink" href="#velocity-control" title="Link to this heading"></a></h3>
+<p>For a motion that is not known in advance, such as visual servoing, the robot can
+follow a velocity that your program keeps sending instead of a trajectory:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">robot</span><span class="o">.</span><span class="n">start_servo</span><span class="p">()</span> <span class="k">as</span> <span class="n">servo</span><span class="p">:</span>
+    <span class="k">while</span> <span class="ow">not</span> <span class="n">done</span><span class="p">:</span>
+        <span class="n">twist</span> <span class="o">=</span> <span class="o">...</span>  <span class="c1"># [vx, vy, vz, wx, wy, wz], from a camera image for example</span>
+        <span class="n">servo</span><span class="o">.</span><span class="n">set_twist</span><span class="p">(</span><span class="n">twist</span><span class="p">)</span>  <span class="c1"># in the end effector's own frame, or frame="base"</span>
+</pre></div>
+</div>
+<p><a class="reference internal" href="#csc376_franky.FrankaJointTrajectoryController.start_servo" title="csc376_franky.FrankaJointTrajectoryController.start_servo"><code class="xref py py-meth docutils literal notranslate"><span class="pre">start_servo()</span></code></a> puts the robot
+under velocity control and returns a <a class="reference internal" href="#csc376_franky.Servo" title="csc376_franky.Servo"><code class="xref py py-class docutils literal notranslate"><span class="pre">Servo</span></code></a>. The end effector
+follows the twist of the last <a class="reference internal" href="#csc376_franky.Servo.set_twist" title="csc376_franky.Servo.set_twist"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_twist()</span></code></a>: its linear
+velocity [m/s], then its angular velocity [rad/s].
+<a class="reference internal" href="#csc376_franky.Servo.stop" title="csc376_franky.Servo.stop"><code class="xref py py-meth docutils literal notranslate"><span class="pre">stop()</span></code></a>, or leaving the <code class="docutils literal notranslate"><span class="pre">with</span></code> block, slows the robot
+down to rest. Meanwhile the robot is busy for the other GPU PC, as during a
+trajectory.</p>
+<p>Nothing is previewed, so the miniPC keeps the motion within limits of its own,
+whatever twist it is sent:</p>
+<table class="wrap-literals docutils align-default">
+<colgroup>
+<col style="width: 50.0%"/>
+<col style="width: 25.0%"/>
+<col style="width: 25.0%"/>
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>The miniPC</p></th>
+<th class="head"><p>Default</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">servo.limited</span></code> then has</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Takes the twist to be zero when no new one has come in time, so the robot
+stops when your program does</p></td>
+<td><p>0.25 s</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">timeout</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Scales down a twist that is too fast, keeping its direction</p></td>
+<td><p>0.1 m/s, 0.5 rad/s</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">speed</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Changes the twist gradually</p></td>
+<td><p>0.3 s from rest to those speeds</p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p>Does not drive the end effector below a minimum height above the robot’s base</p></td>
+<td><p>0.02 m</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">height</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Slows all joints down together where one would be too fast, as near a
+singularity</p></td>
+<td><p>0.3 × the joint velocity limits</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">joint_velocity</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Stops the robot before a joint limit</p></td>
+<td><p>0.05 rad before it</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">joint_position</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Slows the robot down to a crawl near a singularity (the arm stretched out,
+for example), where the end effector cannot move the way it is asked to
+and would go astray</p></td>
+<td></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">singularity</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>So call <code class="docutils literal notranslate"><span class="pre">set_twist()</span></code> at a steady rate, for example once for every camera image.
+<a class="reference internal" href="#csc376_franky.Servo.limited" title="csc376_franky.Servo.limited"><code class="xref py py-attr docutils literal notranslate"><span class="pre">limited</span></code></a> names what holds the robot back at the moment.</p>
+<p>Velocity control ends by itself, and the next <code class="docutils literal notranslate"><span class="pre">set_twist()</span></code> raises
+<a class="reference internal" href="#csc376_franky.RobotError" title="csc376_franky.RobotError"><code class="xref py py-class docutils literal notranslate"><span class="pre">RobotError</span></code></a>, when a reflex or the user stop stops the robot,
+when a joint cannot follow, and when any client calls <code class="docutils literal notranslate"><span class="pre">stop()</span></code>.
+<a class="reference internal" href="#csc376_franky.Servo.error" title="csc376_franky.Servo.error"><code class="xref py py-attr docutils literal notranslate"><span class="pre">error</span></code></a> then says why, and the <code class="docutils literal notranslate"><span class="pre">with</span></code> block raises
+it at its end if nothing else did.</p>
+</section>
 <section id="the-gripper">
 <h3>The gripper<a class="headerlink" href="#the-gripper" title="Link to this heading"></a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">robot.gripper</span></code> is the station’s Franka Hand, a <a class="reference internal" href="#csc376_franky.Gripper" title="csc376_franky.Gripper"><code class="xref py py-class docutils literal notranslate"><span class="pre">Gripper</span></code></a>
@@ -1631,6 +1723,8 @@ wait for it.</p></li>
 is, so the miniPC refuses it. Plan again from <code class="docutils literal notranslate"><span class="pre">get_current_joint_positions()</span></code>.</p></li>
 <li><p>The gripper is shared the same way: one command at a time, and not while the
 other PC’s trajectory runs.</p></li>
+<li><p>Velocity control takes the robot like a trajectory does: while one PC has it, the
+other’s requests raise <code class="docutils literal notranslate"><span class="pre">RobotBusy</span></code>, and its <code class="docutils literal notranslate"><span class="pre">stop()</span></code> ends it.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">RtbVisualizer(...,</span> <span class="pre">real_robot=robot)</span></code> adds a translucent blue Panda that
 follows the real robot, so each PC sees when the other one moves it.</p></li>
 </ul>
@@ -1683,9 +1777,21 @@ surroundings, then <code class="docutils literal notranslate"><span class="pre">
 <td><p>The robot moved since the plan was made: plan again from
 <code class="docutils literal notranslate"><span class="pre">get_current_joint_positions()</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">JointAccelerationsAboveMaximumAllowed</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">JointVelocitiesAboveMaximumAllowed</span></code></p></td>
+<td><p>A joint would have to move faster than the miniPC allows. Slow the
+trajectory down (a lower <code class="docutils literal notranslate"><span class="pre">relative_vel_factor</span></code>). Near a singularity (the
+arm folded up close to its base, or stretched out) even a slow move of the
+end effector needs fast joints</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">JointAccelerationsAboveMaximumAllowed</span></code></p></td>
 <td><p>The trajectory changes a joint’s velocity too abruptly at one point (a
 reversal, a sharp corner). Spread the change over more points</p></td>
+</tr>
+<tr class="row-even"><td><p>Either of the two, or <code class="docutils literal notranslate"><span class="pre">JointDistancesAboveMaxJointDifference</span></code>, for a plan
+that turns the end effector, whatever its factors</p></td>
+<td><p>Before version 2.4, <code class="docutils literal notranslate"><span class="pre">csc376_franky</span></code> made the end effector’s orientation
+jump at one point of such a plan. <code class="docutils literal notranslate"><span class="pre">csc376_franky.__version__</span></code> says which
+version a program runs: it needs 2.4 or later</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TrackingErrorTooLarge</span></code></p></td>
 <td><p>A joint could not follow its command (contact, someone pushed the robot) and
@@ -1693,7 +1799,8 @@ the motion was stopped</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">IncompatibleVersion</span></code></p></td>
 <td><p>The GPU PC’s <code class="docutils literal notranslate"><span class="pre">csc376_franky</span></code> and the robot server are from different
-versions of the repository</p></td>
+versions of the repository. <code class="docutils literal notranslate"><span class="pre">...</span> <span class="pre">has</span> <span class="pre">no</span> <span class="pre">velocity</span> <span class="pre">control</span></code>: the robot server
+is older than 2.2</p></td>
 </tr>
 </tbody>
 </table>
@@ -1782,6 +1889,26 @@ joint velocity and acceleration limits, up to the server’s velocity scale
 run_joint_trajectory; Ctrl+C stops the robot, then raises KeyboardInterrupt.</p>
 </dd></dl>
 <dl class="py method">
+<dt class="sig sig-object py" id="csc376_franky.FrankaJointTrajectoryController.start_servo">
+<span class="sig-name descname"><span class="pre">start_servo</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#csc376_franky.FrankaJointTrajectoryController.start_servo" title="Link to this definition"></a></dt>
+<dd><p>Put the robot under velocity control (servoing) and return its Servo.</p>
+<p>The end effector then follows the twist of Servo.set_twist, which a
+program sends again and again: from each camera image, for example.
+It ends with Servo.stop(), or at the end of a with block:</p>
+<blockquote>
+<div><dl class="simple">
+<dt>with robot.start_servo() as servo:</dt><dd><dl class="simple">
+<dt>while …:</dt><dd><p>servo.set_twist([0, 0, 0.01, 0, 0, 0])  # 1 cm/s along the hand’s z axis</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</div></blockquote>
+<p>The robot is busy for other clients meanwhile, as during a trajectory.
+Raises RobotError if the miniPC refuses, for the reasons it refuses a
+trajectory for (RobotBusy, RobotNotReady).</p>
+</dd></dl>
+<dl class="py method">
 <dt class="sig sig-object py" id="csc376_franky.FrankaJointTrajectoryController.stop">
 <span class="sig-name descname"><span class="pre">stop</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#csc376_franky.FrankaJointTrajectoryController.stop" title="Link to this definition"></a></dt>
 <dd><p>Stop the running trajectory, whichever client started it: the robot
@@ -1808,6 +1935,62 @@ again. Check the robot and its surroundings first.</p>
 <dt class="sig sig-object py" id="csc376_franky.FrankaJointTrajectoryController.join">
 <span class="sig-name descname"><span class="pre">join</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#csc376_franky.FrankaJointTrajectoryController.join" title="Link to this definition"></a></dt>
 <dd><p>Not needed any more: the control loop runs on the miniPC.</p>
+</dd></dl>
+</dd></dl>
+<dl class="py class">
+<dt class="sig sig-object py" id="csc376_franky.Servo">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">csc376_franky.</span></span><span class="sig-name descname"><span class="pre">Servo</span></span><a class="headerlink" href="#csc376_franky.Servo" title="Link to this definition"></a></dt>
+<dd><p>The robot under velocity control, from FrankaJointTrajectoryController.start_servo().</p>
+<p>The end effector follows the twist of set_twist() until stop(). The miniPC
+keeps the motion within its limits whatever the twist: it scales a twist
+that is too fast, changes speed gradually, stops the robot before a joint
+limit, and keeps the end effector above a minimum height. It also
+replaces a twist that is older than its timeout (0.25 s unless the miniPC
+was set up otherwise) by zero, so the robot only moves while set_twist()
+keeps being called.</p>
+<p>As a context manager it stops the robot at the end of the with block, and
+raises the RobotError that ended velocity control if something else did.</p>
+<dl class="py property">
+<dt class="sig sig-object py" id="csc376_franky.Servo.active">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">active</span></span><a class="headerlink" href="#csc376_franky.Servo.active" title="Link to this definition"></a></dt>
+<dd><p>True until velocity control has ended, by stop() or by itself.</p>
+</dd></dl>
+<dl class="py property">
+<dt class="sig sig-object py" id="csc376_franky.Servo.error">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">error</span></span><a class="headerlink" href="#csc376_franky.Servo.error" title="Link to this definition"></a></dt>
+<dd><p>The RobotError that says why velocity control ended, if it was not by stop().</p>
+<p>None otherwise. error.code is ErrorCodes.Interrupted when another
+client’s stop() ended it, and ErrorCodes.ControlException after a
+reflex, for example.</p>
+</dd></dl>
+<dl class="py property">
+<dt class="sig sig-object py" id="csc376_franky.Servo.status">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">status</span></span><a class="headerlink" href="#csc376_franky.Servo.status" title="Link to this definition"></a></dt>
+<dd><p>What the miniPC reports of this velocity control, or None once it has ended.</p>
+<p>A dict with “twist”, the twist the robot is following now in the base
+frame, and “limited”, the names of what holds that back from the twist
+it was given: “timeout” (no new twist in time), “speed”, “height”,
+“joint_velocity”, “joint_position”, “singularity”.</p>
+</dd></dl>
+<dl class="py property">
+<dt class="sig sig-object py" id="csc376_franky.Servo.limited">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">limited</span></span><a class="headerlink" href="#csc376_franky.Servo.limited" title="Link to this definition"></a></dt>
+<dd><p>The names of what holds the robot back from the twist it was given (see status).</p>
+</dd></dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="csc376_franky.Servo.set_twist">
+<span class="sig-name descname"><span class="pre">set_twist</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">twist</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frame</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'end_effector'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#csc376_franky.Servo.set_twist" title="Link to this definition"></a></dt>
+<dd><p>The twist for the end effector to follow from now on.</p>
+<p>twist is [vx, vy, vz, wx, wy, wz]: the linear velocity of the end
+effector’s origin [m/s], then its angular velocity [rad/s], in the
+end effector’s own frame (“end_effector”) or the robot’s (“base”).
+Raises RobotError once velocity control has ended (e.code says why).</p>
+</dd></dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="csc376_franky.Servo.stop">
+<span class="sig-name descname"><span class="pre">stop</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#csc376_franky.Servo.stop" title="Link to this definition"></a></dt>
+<dd><p>Slow the robot down to rest and end velocity control.</p>
+<p>Returns True if it was still running, once the robot has stopped.</p>
 </dd></dl>
 </dd></dl>
 <dl class="py class">
@@ -2093,9 +2276,12 @@ server/include/csc376_franky/common.hpp.</p>
 starting from se3_start and ending at se3_target. The trajectory also follows
 the given cartesian constraints: relative_vel_factor, relative_acc_factor, and relative_jerk_factor
 which implicitly converts to a joint constraint :).</p>
-<p>The rotation vector’s components are interpolated linearly, which only
-follows a rotation about a fixed axis when the start and target
-orientations are close. Plan a large reorientation as several short moves.</p>
+<p>The end effector goes from the position of se3_start to that of
+se3_target, and turns from the orientation of se3_start to that of
+se3_target about one fixed axis, the short way round: by at most half a
+turn. Where the two orientations are exactly half a turn apart, either
+way round is as short, and rounding decides which one it takes. The
+rotation limits apply to the angle turned about that axis.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -2116,7 +2302,11 @@ Limits the cartesian jerk during the entire trajectory.</p></li>
 <dd class="field-odd"><p><ul class="simple">
 <li><p><strong>cartesian_pose_traj</strong> (<em>list[list]</em>) – List of a List: [[x, y, z, rx, ry, rz, elbow_angle], … ].
 Cartesian pose trajectory of the end effector, from se3_start (at time 0)
-to se3_target.</p></li>
+to se3_target: its position [m] and the rotation vector of its
+orientation [rad], in the base frame. A rotation vector is not
+continuous: where the end effector is half a turn from the base frame
+(a hand pointing down, for example), it can change sign from one point
+to the next although the orientation hardly changes.</p></li>
 <li><p><strong>self.dt</strong> (<em>float</em>) – Delta time between trajectory points of the cartsian_pose_traj.</p></li>
 </ul>
 </p>
@@ -2135,7 +2325,9 @@ from the model.</p>
 <li><p><strong>q_start</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.5)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></a></span>) – The robot’s current joint positions to determine redundant solutions in the IK.
 The size is joint_dof of robot.</p></li>
 <li><p><strong>cartesian_pose_traj</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#list" title="(in Python v3.15)"><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code></a>[<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#list" title="(in Python v3.15)"><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code></a>]</span>) – List of a List: [[x, y, z, rx, ry, rz, elbow_angle], … ].
-Cartesian pose trajectory of the end effector.</p></li>
+Cartesian pose trajectory of the end effector: its position [m] and
+the rotation vector of its orientation [rad], in the base frame, as
+calculate_cartesian_pose_trajectory returns it.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -2262,7 +2454,19 @@ The server answers each request once, when it has finished:</p>
 </pre></div>
 </div>
 <p>Requests: hello (first), state, ping, heartbeat, execute, move_home, stop,
-recover, gripper_homing, gripper_move, gripper_grasp, gripper_stop.</p>
+recover, servo_start, servo_twist, servo_stop, gripper_homing, gripper_move,
+gripper_grasp, gripper_stop.</p>
+<p>Velocity control (servoing) is one request that lasts as long as the motion:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s2">"op"</span><span class="p">:</span> <span class="s2">"servo_start"</span><span class="p">,</span> <span class="s2">"id"</span><span class="p">:</span> <span class="mi">8</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>The server answers it when velocity control has ended. Meanwhile the client
+streams the twist the end effector should follow, as notifications:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s2">"op"</span><span class="p">:</span> <span class="s2">"servo_twist"</span><span class="p">,</span> <span class="s2">"twist"</span><span class="p">:</span> <span class="p">[</span><span class="n">vx</span><span class="p">,</span> <span class="n">vy</span><span class="p">,</span> <span class="n">vz</span><span class="p">,</span> <span class="n">wx</span><span class="p">,</span> <span class="n">wy</span><span class="p">,</span> <span class="n">wz</span><span class="p">],</span> <span class="s2">"frame"</span><span class="p">:</span> <span class="s2">"end_effector"</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>and ends it with servo_stop. The hello reply lists “servo” among its
+“features” if the server has it.</p>
 </section>
 </section>
 <section id="credits-and-licence">
@@ -2288,7 +2492,7 @@ have the licence and the details.</p>
   <hr/>
 
   <div role="contentinfo">
-  <p>Copyright &#169; 2020-present, Jesse Haviland and Peter Corke: built 2026-11-13.
+  <p>Copyright &#169; 2020-present, Jesse Haviland and Peter Corke: built 2026-11-20.
   </p>
   <a href="https://github.com/petercorke/robotics-toolbox-python" class="footer-github-link">GitHub</a>
 
