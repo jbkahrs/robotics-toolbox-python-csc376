@@ -66,6 +66,12 @@ enum class ErrorCodes
 
 const char* errorCodeName(ErrorCodes code);
 
+// JSON for the motion log's header lines: a quoted, escaped string; a number
+// (null if not finite); an array of 7.
+std::string jsonString(const std::string& text);
+std::string jsonNumber(double value);
+std::string jsonArray(const Vec7& values);
+
 // What the miniPC lets a trajectory do. Set by whoever runs the server, never
 // by the client: the defaults are the old controller's checks, made absolute.
 struct Limits
@@ -100,6 +106,10 @@ struct Limits
     // Joint impedance of the old controller [Nm/rad], [Nms/rad].
     Vec7 stiffness = {600.0, 900.0, 600.0, 300.0, 300.0, 200.0, 100.0};
     Vec7 damping = {50.0, 70.0, 70.0, 60.0, 30.0, 15.0, 10.0};
+    // Joint impedance of the robot's own controller [Nm/rad], which follows
+    // the joint position commands of move_home and the joint velocity
+    // commands of velocity control (libfranka's setDefaultBehavior values).
+    Vec7 joint_impedance = {3000.0, 3000.0, 3000.0, 2500.0, 2500.0, 2000.0, 2000.0};
 
     // Velocity control (servoing), where a client streams the twist the end
     // effector should follow. A twist faster than this is scaled down, keeping

@@ -22,6 +22,8 @@ struct Measured
     // Where the robot's own controller holds or commands the joints.
     Vec7 q_d{};
     Vec7 tau_J{};
+    // The torque the robot was asked for in the previous cycle (zero in simulation).
+    Vec7 tau_J_d{};
     Vec7 tau_ext_hat_filtered{};
     std::array<double, 16> O_T_EE{};
     // The end effector in the flange frame, as Desk sets it up.

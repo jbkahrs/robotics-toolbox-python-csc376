@@ -27,7 +27,7 @@ def result_of(controller, controller_id, timeout=10.0):
     def finished():
         found[:] = [
             (ErrorCodes(code), message)
-            for i, code, message in controller.snapshot()["results"]
+            for i, code, message, _ in controller.snapshot()["results"]
             if i == controller_id
         ]
         return bool(found)
@@ -166,7 +166,7 @@ def test_a_finished_command_is_not_shown_running(controller):
 
     def finished():
         seen[:] = [controller.snapshot()]
-        return any(i == controller_id for i, _, _ in seen[0]["results"])
+        return any(i == controller_id for i, *_ in seen[0]["results"])
 
     # The first snapshot with the result already shows the robot idle.
     assert wait_until(finished, period=0.0)

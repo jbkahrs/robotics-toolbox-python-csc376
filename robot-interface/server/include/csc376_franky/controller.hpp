@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "csc376_franky/backend.hpp"
+#include "csc376_franky/motion_log.hpp"
 #include "csc376_franky/trajectory.hpp"
 #include "csc376_franky/twist_follower.hpp"
 
@@ -57,6 +58,8 @@ public:
         std::uint64_t id = 0;
         ErrorCodes code = ErrorCodes::Success;
         std::string message;
+        // The motion log's file for it, if there is a log.
+        std::string log_file;
     };
 
     struct Snapshot
@@ -90,7 +93,8 @@ public:
         std::vector<Result> results;
     };
 
-    Controller(std::unique_ptr<Backend> backend, const Limits& limits);
+    // With a log, every motion is recorded there at the control rate.
+    Controller(std::unique_ptr<Backend> backend, const Limits& limits, std::shared_ptr<MotionLog> log = nullptr);
     ~Controller();
     Controller(const Controller&) = delete;
     Controller& operator=(const Controller&) = delete;
@@ -166,14 +170,17 @@ private:
     void runTrajectory(std::uint64_t id, std::vector<Vec7> points, double dt);
     void runJointMotion(std::uint64_t id, const Vec7& q_goal, double speed_factor);
     void runServo(std::uint64_t id);
-    // Runs a motion (which returns true if it was stopped early) and records how it ended.
-    void runMotion(std::uint64_t id, const std::function<bool()>& motion);
+    // Runs a motion (which returns true if it was stopped early) and records
+    // how it ended. kind and fields (JSON members) describe it to the log.
+    void runMotion(std::uint64_t id, const char* kind, const std::string& fields, const std::function<bool()>& motion);
+    // Gives the log one control cycle.
+    void record(const Measured& measured, double period, const Progress& progress);
     void checkTracking(const Vec7& q_d, const Vec7& q) const;
     void runRecovery(std::uint64_t id);
     void publish(const Measured& measured, const Progress* progress);
     void clearState();
     void connectionLost(const std::string& reason);
-    void finish(std::uint64_t id, ErrorCodes code, const std::string& message);
+    void finish(std::uint64_t id, ErrorCodes code, const std::string& message, const std::string& log_file);
     void finishPendingLocked(ErrorCodes code, const std::string& message);
     bool busyLocked() const;
     // Whether the velocity control with this id is the running motion.
@@ -184,6 +191,7 @@ private:
 
     std::unique_ptr<Backend> backend_;
     const Limits limits_;
+    const std::shared_ptr<MotionLog> log_;
 
     mutable std::mutex mutex_;
     std::condition_variable cv_;

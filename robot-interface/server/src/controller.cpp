@@ -44,8 +44,8 @@ const char* notReadyReason(int mode)
 
 } // namespace
 
-Controller::Controller(std::unique_ptr<Backend> backend, const Limits& limits)
-    : backend_(std::move(backend)), limits_(limits)
+Controller::Controller(std::unique_ptr<Backend> backend, const Limits& limits, std::shared_ptr<MotionLog> log)
+    : backend_(std::move(backend)), limits_(limits), log_(std::move(log))
 {
     thread_ = std::thread(&Controller::run, this);
 }
@@ -521,7 +521,9 @@ void Controller::runTrajectory(std::uint64_t id, std::vector<Vec7> points, doubl
         dq_d_.fill(0.0);
     }
 
-    runMotion(id, [&] {
+    const std::string fields = "\"points\": " + std::to_string(follower.length()) + ", \"dt\": " + jsonNumber(dt) +
+                               ", \"duration\": " + jsonNumber(follower.duration());
+    runMotion(id, "trajectory", fields, [&] {
         bool first = true;
         backend_->control([&](const Measured& measured, double period) {
             // The authoritative start check: execute() checked against a state
@@ -551,6 +553,7 @@ void Controller::runTrajectory(std::uint64_t id, std::vector<Vec7> points, doubl
             progress.q_d = follower.qDesired();
             progress.dq_d = follower.dqDesired();
             publish(measured, &progress);
+            record(measured, period, progress);
             Command command;
             command.q_d = follower.qDesired();
             command.dq_d = follower.dqDesired();
@@ -575,7 +578,8 @@ void Controller::runJointMotion(std::uint64_t id, const Vec7& q_goal, double spe
         dq_d_.fill(0.0);
     }
 
-    runMotion(id, [&] {
+    const std::string fields = "\"speed_factor\": " + jsonNumber(speed_factor) + ", \"q_goal\": " + jsonArray(q_goal);
+    runMotion(id, "joint_motion", fields, [&] {
         // Starts on the first cycle from where the robot holds its joints (q_d,
         // not the measured q), as libfranka's MotionGenerator does: the first
         // command then continues the robot's own, without a step.
@@ -606,6 +610,7 @@ void Controller::runJointMotion(std::uint64_t id, const Vec7& q_goal, double spe
             progress.q_d = command.q_d;
             progress.index = arrived ? 1 : 0;
             publish(measured, &progress);
+            record(measured, period, progress);
             command.finished = arrived || rate <= 0.0;
             return command;
         });
@@ -629,7 +634,7 @@ void Controller::runServo(std::uint64_t id)
         limited_ = 0;
     }
 
-    runMotion(id, [&] {
+    runMotion(id, "servo", "", [&] {
         TwistFollower follower(limits_);
         std::uint64_t seen = 0;
         bool interrupted = false;
@@ -668,6 +673,7 @@ void Controller::runServo(std::uint64_t id)
             progress.twist = follower.twist();
             progress.limited = follower.limited();
             publish(measured, &progress);
+            record(measured, period, progress);
             Command command;
             command.q_d = measured.q_d;
             command.dq_d = follower.dqCommand();
@@ -678,8 +684,12 @@ void Controller::runServo(std::uint64_t id)
     });
 }
 
-void Controller::runMotion(std::uint64_t id, const std::function<bool()>& motion)
+void Controller::runMotion(std::uint64_t id, const char* kind, const std::string& fields,
+                           const std::function<bool()>& motion)
 {
+    std::string log_file;
+    if (log_)
+        log_file = log_->begin(id, kind, fields).string();
     ErrorCodes code = ErrorCodes::Success;
     std::string message;
     try
@@ -711,7 +721,36 @@ void Controller::runMotion(std::uint64_t id, const std::function<bool()>& motion
         code = ErrorCodes::ControlException;
         message = e.what();
     }
-    finish(id, code, message);
+    if (log_)
+    {
+        log_->end("\"code\": " + std::to_string(static_cast<int>(code)) +
+                  ", \"name\": " + jsonString(errorCodeName(code)) + ", \"message\": " + jsonString(message));
+    }
+    finish(id, code, message, log_file);
+}
+
+void Controller::record(const Measured& measured, double period, const Progress& progress)
+{
+    if (!log_)
+        return;
+    LogSample sample;
+    sample.time = measured.time;
+    sample.period = period;
+    sample.robot_mode = measured.robot_mode;
+    sample.success_rate = measured.control_command_success_rate;
+    sample.index = progress.index;
+    sample.phase = progress.settling ? 2 : progress.stopping ? 1 : 0;
+    sample.q = measured.q;
+    sample.dq = measured.dq;
+    sample.q_d = progress.q_d;
+    sample.dq_d = progress.dq_d;
+    sample.tau_J = measured.tau_J;
+    sample.tau_J_d = measured.tau_J_d;
+    sample.tau_ext = measured.tau_ext_hat_filtered;
+    sample.position = {measured.O_T_EE[12], measured.O_T_EE[13], measured.O_T_EE[14]};
+    sample.twist = progress.twist;
+    sample.limited = progress.limited;
+    log_->record(sample);
 }
 
 // --- Safety: never chase a joint that cannot follow (old MAX_JOINT_DIFFERENCE_IMPEDENCE) --- //
@@ -748,7 +787,7 @@ void Controller::runRecovery(std::uint64_t id)
         code = ErrorCodes::ControlException;
         message = std::string("Error recovery failed: ") + e.what();
     }
-    finish(id, code, message);
+    finish(id, code, message, "");
 }
 
 void Controller::publish(const Measured& measured, const Progress* progress)
@@ -792,10 +831,10 @@ void Controller::connectionLost(const std::string& reason)
     finishPendingLocked(ErrorCodes::ConnectionLost, connection_error_);
 }
 
-void Controller::finish(std::uint64_t id, ErrorCodes code, const std::string& message)
+void Controller::finish(std::uint64_t id, ErrorCodes code, const std::string& message, const std::string& log_file)
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    results_.push_back(Result{id, code, message});
+    results_.push_back(Result{id, code, message, log_file});
     if (results_.size() > kMaxResults)
         results_.pop_front();
     // In the same breath as the result, so that no snapshot shows a finished
@@ -810,7 +849,7 @@ void Controller::finishPendingLocked(ErrorCodes code, const std::string& message
 {
     if (pending_ == Pending::None)
         return;
-    results_.push_back(Result{pending_id_, code, message});
+    results_.push_back(Result{pending_id_, code, message, ""});
     if (results_.size() > kMaxResults)
         results_.pop_front();
     pending_ = Pending::None;

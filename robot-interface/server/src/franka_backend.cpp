@@ -46,6 +46,7 @@ Measured toMeasured(const franka::RobotState& state)
     m.dq = state.dq;
     m.q_d = state.q_d;
     m.tau_J = state.tau_J;
+    m.tau_J_d = state.tau_J_d;
     m.tau_ext_hat_filtered = state.tau_ext_hat_filtered;
     m.O_T_EE = state.O_T_EE;
     m.F_T_EE = state.F_T_EE;
@@ -62,7 +63,7 @@ class FrankaBackend : public Backend
 public:
     FrankaBackend(std::string robot_ip, const Limits& limits, bool enforce_realtime)
         : robot_ip_(std::move(robot_ip)), stiffness_(limits.stiffness), damping_(limits.damping),
-          enforce_realtime_(enforce_realtime)
+          joint_impedance_(limits.joint_impedance), enforce_realtime_(enforce_realtime)
     {
     }
 
@@ -283,9 +284,9 @@ private:
                 {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}},
                 {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}});
             // clang-format on
-            // The robot's own joint impedance, for controlJointPositions (libfranka's
-            // setDefaultBehavior); the torque loop in control() does not use it.
-            robot_->setJointImpedance({{3000, 3000, 3000, 2500, 2500, 2000, 2000}});
+            // The robot's own joint impedance, for controlJointPositions and
+            // controlJointVelocities; the torque loop in control() does not use it.
+            robot_->setJointImpedance(joint_impedance_);
             configured_ = true;
         }
         catch (const franka::NetworkException& e)
@@ -313,6 +314,7 @@ private:
     const std::string robot_ip_;
     const Vec7 stiffness_;
     const Vec7 damping_;
+    const Vec7 joint_impedance_;
     const bool enforce_realtime_;
     std::unique_ptr<franka::Robot> robot_;
     std::unique_ptr<franka::Model> model_;
