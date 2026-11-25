@@ -72,11 +72,32 @@ robot.move_gripper(0.0)  # close the gripper
 | `read_robot_state.py` | Prints the joint positions, velocities and end-effector pose |
 | `read_gripper_state.py` | Prints the gripper width |
 | `visualize_then_execute_trajectory.py` | Moves 10 cm: preview in Swift, then on the robot after you type `yes` |
+| `visualize_then_execute_joint_trajectory.py` | Moves in joint space to the toolbox's ready pose (`qr`), or from there to libfranka's home pose: preview in Swift, then on the robot after you type `yes` (see below) |
 | `visualize_and_move_gripper.py` | Closes and opens the gripper, in Swift and then on the robot |
 | `sim_or_real_trajectory.py` | A 10 cm square, in Swift (`simulation = True`) or on the robot |
 | `sim_or_real_trajectory_with_wrapper.py` | The square in Swift, then on the robot, through `RobotWrapper` |
 | `move_home.py` | Moves the robot to libfranka's home pose after you type `yes` (see below) |
 | `velocity_control.py` | Moves the hand 3 cm up under velocity control after you type `yes` (see below) |
+
+`motion_generator.calculate_joint_trajectory(q_start, q_target)` plans a move in joint
+space, for when it is the joint positions that matter and not the path of the hand:
+to bring the arm to a known configuration, for example.
+
+```python
+q_start = robot.get_current_joint_positions()
+q_traj, dt = motion_generator.calculate_joint_trajectory(q_start, panda.qr)
+visualizer.run_joint_trajectory(q_traj, dt)  # preview it like any other trajectory
+robot.run_joint_trajectory(q_traj, dt)
+```
+
+The joints go straight from `q_start` to `q_target`, starting and arriving together,
+and Ruckig keeps each one within its velocity, acceleration and jerk limits. There is
+no inverse kinematics in it, so the robot ends at `q_target` itself, which has to be
+inside the robot's joint limits (`ValueError` otherwise). The hand's path
+in between is a curve that is not planned, so look at the preview. The three factors
+scale the Panda's joint limits and default to 0.1, 0.05 and 0.001, which takes joint 1
+through a quarter turn in about 8 s. The miniPC refuses a velocity factor above its
+velocity scale (0.3).
 
 `robot.move_home(speed_factor=0.2)` moves the robot the way libfranka's examples do,
 without Ruckig or the toolbox. The miniPC runs libfranka's example `MotionGenerator`
@@ -84,7 +105,9 @@ through the robot's own joint position controller, going straight in joint space
 wherever the robot is to `protocol.HOME_JOINT_POSITIONS` (0, −π/4, 0, −3π/4, 0, π/2, π/4).
 Nothing is planned or previewed on the GPU PC, so check that the way is clear first.
 `speed_factor` can be at most the miniPC's velocity scale (0.3). `stop()`, Ctrl+C and
-the other checks work as they do for a trajectory.
+the other checks work as they do for a trajectory. For a move home that you can
+preview, plan it in joint space: `calculate_joint_trajectory(q_start,
+protocol.HOME_JOINT_POSITIONS)`.
 
 ## Velocity control
 
@@ -212,6 +235,7 @@ on the robot always works and does not depend on any of this.
 | IK failures silently gave wrong joint positions | `RuntimeError` |
 | The hand's orientation was interpolated as the three components of its rotation vector. Where rx changes sign (a hand pointing down), the plan made the hand jump, and the miniPC refused it whatever the speed factors | The hand turns about one fixed axis, the short way round, from the start orientation to the target's (since 2.4) |
 | A Cartesian trajectory held rx mapped by `normalize_rx_angle` | It holds the rotation vector of each pose itself (since 2.4). Give `cartesian_pose_to_joint_trajectory` poses of your own the same way |
+| The motion generator planned straight moves of the hand only | `calculate_joint_trajectory` plans a move in joint space, straight to given joint positions (since 2.5) |
 | numpy 1.26.4, websockets 13 and the swift-csc376 fork | The course toolbox fork (1.4.2) and Swift 2 |
 | An exception in the 1 kHz loop killed the program | The miniPC reports it; `recover()` clears a reflex |
 | Joint speed limit 0.3 × (3.0 ×3, 2.5 ×3, 2.62) rad/s | 0.3 × the datasheet's (2.175 ×4, 2.61 ×3) rad/s: 0.65 instead of 0.9 rad/s on joints 1 to 3, 0.65 instead of 0.75 rad/s on joint 4 |
