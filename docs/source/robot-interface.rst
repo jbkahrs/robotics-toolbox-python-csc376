@@ -96,6 +96,9 @@ Toolbox, Ruckig and ``csc376_franky``, and the examples, to copy into your home:
     cp -r "$CONDA_PREFIX/share/csc376_franky/examples" ~/csc376_franky_examples
     cd ~/csc376_franky_examples && python visualize_then_execute_trajectory.py
 
+This page (``docs.html``, to open in a browser) and the README are next to the
+examples, in ``$CONDA_PREFIX/share/csc376_franky``.
+
 **Dev container**: nothing to install either; it installs ``csc376_franky`` from
 ``robot-interface/`` in editable mode.
 
@@ -130,6 +133,10 @@ Examples
      - Prints the gripper width
    * - ``visualize_then_execute_trajectory.py``
      - Moves 10 cm: preview in Swift, then on the robot after you type ``yes``
+   * - ``visualize_then_execute_joint_trajectory.py``
+     - Moves in joint space to the Toolbox's ready pose (``qr``), or from there to
+       libfranka's home pose: preview in Swift, then on the robot after you type
+       ``yes`` (see :ref:`robot-interface-joint-space`)
    * - ``visualize_and_move_gripper.py``
      - Closes and opens the gripper, in Swift and then on the robot
    * - ``sim_or_real_trajectory.py``
@@ -197,6 +204,70 @@ Three things to know when planning:
   or the long way round, plan two moves.
 - ``cartesian_pose_to_joint_trajectory`` raises ``RuntimeError`` when the inverse
   kinematics finds no solution for a pose, for example a target out of reach.
+
+.. _robot-interface-joint-space:
+
+Planning a move in joint space
+------------------------------
+
+:meth:`~csc376_franky.motion_generator.RuckigMotionGenerator.calculate_joint_trajectory`
+plans a move between two sets of joint positions instead of two poses, in one step:
+
+.. code-block:: python
+
+    q_start = robot.get_current_joint_positions()
+    q_target = panda.qr  # the joint positions to end at
+    q_traj, dt = motion_generator.calculate_joint_trajectory(q_start, q_target)
+
+    visualizer.run_joint_trajectory(q_traj, dt)
+    robot.run_joint_trajectory(q_traj, dt)
+
+The joints go straight from ``q_start`` to ``q_target`` in joint space: they start
+together and arrive together, and at every moment each joint has gone the same
+fraction of its way. Ruckig sets the pace, as fast as the velocity, acceleration
+and jerk limits of every joint allow. The result is a joint trajectory like that of
+``cartesian_pose_to_joint_trajectory``, with the same ``dt``.
+
+Plan in joint space when it is the joint positions that matter: to bring the arm to
+a known configuration before a task, for example. No inverse kinematics is
+involved, so the robot ends at ``q_target`` itself. A Cartesian move to
+``panda.fkine(q_target)`` ends with the end effector at the same pose, but not
+always with the joints at ``q_target``: the Panda has seven joints, and more than
+one set of joint positions reaches a pose.
+
+The three factors of ``calculate_joint_trajectory`` scale the Panda's joint limits
+from its datasheet:
+
+.. list-table::
+   :class: wrap-literals
+   :header-rows: 1
+   :widths: 35 15 50
+
+   * - Factor
+     - Default
+     - Limits of joints 1 to 7
+   * - ``relative_vel_factor``
+     - 0.1
+     - 2.175 rad/s (joints 1 to 4), 2.61 rad/s (joints 5 to 7)
+   * - ``relative_acc_factor``
+     - 0.05
+     - 15, 7.5, 10, 12.5, 15, 20, 20 rad/s²
+   * - ``relative_jerk_factor``
+     - 0.001
+     - 7500, 3750, 5000, 6250, 7500, 10 000, 10 000 rad/s³
+
+Three things to know when planning in joint space:
+
+- The end effector's path is not planned. It is whatever the joints make it, a
+  curve and not a straight line, so look at the preview before the move runs on
+  the robot.
+- The miniPC refuses a trajectory that is faster than its velocity scale, so
+  ``relative_vel_factor`` can be at most 0.3. With the default factors, joint 1
+  takes about 8 s for a quarter turn.
+- ``q_target`` has to be inside the robot's joint limits, in radians:
+  ``calculate_joint_trajectory`` raises ``ValueError`` if it is not. The miniPC
+  keeps every trajectory 0.01 rad away from the limits, and refuses one that comes
+  closer (``JointLimitsExceeded``).
 
 A trajectory does not have to come from the motion generator. The robot runs any
 N x 7 array of joint positions that passes the miniPC's checks
@@ -338,6 +409,9 @@ controller, going straight in joint space from wherever the robot is to
 
 ``speed_factor`` (0.2 by default) can be at most the miniPC's velocity scale, 0.3.
 ``stop()``, Ctrl+C and the miniPC's other checks work as they do for a trajectory.
+
+For a move home that you can preview, plan it in joint space instead, to
+``protocol.HOME_JOINT_POSITIONS`` (see :ref:`robot-interface-joint-space`).
 
 .. _robot-interface-servo:
 
@@ -544,6 +618,11 @@ Troubleshooting
    * - ``JointTrajectoryDoesNotStartAtCurrentPosition``
      - The robot moved since the plan was made: plan again from
        ``get_current_joint_positions()``
+   * - ``JointLimitsExceeded``
+     - A point of the trajectory is closer than 0.01 rad to one of the robot's
+       joint limits, or beyond it; the message names the joint and the range it
+       may be in. A move in joint space is closest to the limits at its ends, so
+       look at ``q_target``
    * - ``JointVelocitiesAboveMaximumAllowed``
      - A joint would have to move faster than the miniPC allows. Slow the
        trajectory down (a lower ``relative_vel_factor``). Near a singularity (the
@@ -557,6 +636,10 @@ Troubleshooting
      - Before version 2.4, ``csc376_franky`` made the end effector's orientation
        jump at one point of such a plan. ``csc376_franky.__version__`` says which
        version a program runs: it needs 2.4 or later
+   * - ``'RuckigMotionGenerator' object has no attribute
+       'calculate_joint_trajectory'``
+     - ``csc376_franky`` plans in joint space since version 2.5, and the program
+       runs an older one
    * - ``TrackingErrorTooLarge``
      - A joint could not follow its command (contact, someone pushed the robot) and
        the motion was stopped

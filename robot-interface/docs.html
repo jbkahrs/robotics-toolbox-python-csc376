@@ -1049,6 +1049,7 @@ runWhenDOMLoaded(addCopyButtonToCodeCells)
 <li><a class="reference internal" href="#examples">Examples</a></li>
 <li><a class="reference internal" href="#planning-and-previewing">Planning and previewing</a><ul>
 <li><a class="reference internal" href="#planning-a-trajectory">Planning a trajectory</a></li>
+<li><a class="reference internal" href="#planning-a-move-in-joint-space">Planning a move in joint space</a></li>
 <li><a class="reference internal" href="#previewing-in-swift">Previewing in Swift</a></li>
 <li><a class="reference internal" href="#preview-then-robot">Preview, then robot</a></li>
 </ul>
@@ -1174,6 +1175,7 @@ runWhenDOMLoaded(addCopyButtonToCodeCells)
 <li><a class="reference internal" href="#csc376_franky.motion_generator.RuckigMotionGenerator"><code class="docutils literal notranslate"><span class="pre">RuckigMotionGenerator</span></code></a><ul>
 <li><a class="reference internal" href="#csc376_franky.motion_generator.RuckigMotionGenerator.calculate_cartesian_pose_trajectory"><code class="docutils literal notranslate"><span class="pre">RuckigMotionGenerator.calculate_cartesian_pose_trajectory()</span></code></a></li>
 <li><a class="reference internal" href="#csc376_franky.motion_generator.RuckigMotionGenerator.cartesian_pose_to_joint_trajectory"><code class="docutils literal notranslate"><span class="pre">RuckigMotionGenerator.cartesian_pose_to_joint_trajectory()</span></code></a></li>
+<li><a class="reference internal" href="#csc376_franky.motion_generator.RuckigMotionGenerator.calculate_joint_trajectory"><code class="docutils literal notranslate"><span class="pre">RuckigMotionGenerator.calculate_joint_trajectory()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -1314,6 +1316,8 @@ Toolbox, Ruckig and <code class="docutils literal notranslate"><span class="pre"
 <span class="n">cd</span> <span class="o">~/</span><span class="n">csc376_franky_examples</span> <span class="o">&amp;&amp;</span> <span class="n">python</span> <span class="n">visualize_then_execute_trajectory</span><span class="o">.</span><span class="n">py</span>
 </pre></div>
 </div>
+<p>This page (<code class="docutils literal notranslate"><span class="pre">docs.html</span></code>, to open in a browser) and the README are next to the
+examples, in <code class="docutils literal notranslate"><span class="pre">$CONDA_PREFIX/share/csc376_franky</span></code>.</p>
 <p><strong>Dev container</strong>: nothing to install either; it installs <code class="docutils literal notranslate"><span class="pre">csc376_franky</span></code> from
 <code class="docutils literal notranslate"><span class="pre">robot-interface/</span></code> in editable mode.</p>
 <p><strong>Anywhere else</strong>: install the Toolbox from the course fork as its README says,
@@ -1350,21 +1354,26 @@ environment variables <code class="docutils literal notranslate"><span class="pr
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">visualize_then_execute_trajectory.py</span></code></p></td>
 <td><p>Moves 10 cm: preview in Swift, then on the robot after you type <code class="docutils literal notranslate"><span class="pre">yes</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">visualize_and_move_gripper.py</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">visualize_then_execute_joint_trajectory.py</span></code></p></td>
+<td><p>Moves in joint space to the Toolbox’s ready pose (<code class="docutils literal notranslate"><span class="pre">qr</span></code>), or from there to
+libfranka’s home pose: preview in Swift, then on the robot after you type
+<code class="docutils literal notranslate"><span class="pre">yes</span></code> (see <a class="reference internal" href="#robot-interface-joint-space"><span class="std std-ref">Planning a move in joint space</span></a>)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">visualize_and_move_gripper.py</span></code></p></td>
 <td><p>Closes and opens the gripper, in Swift and then on the robot</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">sim_or_real_trajectory.py</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">sim_or_real_trajectory.py</span></code></p></td>
 <td><p>A 10 cm square, in Swift (<code class="docutils literal notranslate"><span class="pre">simulation</span> <span class="pre">=</span> <span class="pre">True</span></code>) or on the robot</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">sim_or_real_trajectory_with_wrapper.py</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">sim_or_real_trajectory_with_wrapper.py</span></code></p></td>
 <td><p>The square in Swift, then on the robot, through
 <a class="reference internal" href="#csc376_franky.robot_wrapper.RobotWrapper" title="csc376_franky.robot_wrapper.RobotWrapper"><code class="xref py py-class docutils literal notranslate"><span class="pre">RobotWrapper</span></code></a></p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">move_home.py</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">move_home.py</span></code></p></td>
 <td><p>Moves the robot to libfranka’s home pose after you type <code class="docutils literal notranslate"><span class="pre">yes</span></code>
 (see <a class="reference internal" href="#robot-interface-home"><span class="std std-ref">Moving home</span></a>)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">velocity_control.py</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">velocity_control.py</span></code></p></td>
 <td><p>Moves the hand 3 cm up under velocity control after you type <code class="docutils literal notranslate"><span class="pre">yes</span></code>
 (see <a class="reference internal" href="#robot-interface-servo"><span class="std std-ref">Velocity control</span></a>)</p></td>
 </tr>
@@ -1429,6 +1438,72 @@ fixed axis, the short way round, so by at most half a turn. To turn it further,
 or the long way round, plan two moves.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">cartesian_pose_to_joint_trajectory</span></code> raises <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> when the inverse
 kinematics finds no solution for a pose, for example a target out of reach.</p></li>
+</ul>
+</section>
+<section id="planning-a-move-in-joint-space">
+<span id="robot-interface-joint-space"></span><h3>Planning a move in joint space<a class="headerlink" href="#planning-a-move-in-joint-space" title="Link to this heading"></a></h3>
+<p><a class="reference internal" href="#csc376_franky.motion_generator.RuckigMotionGenerator.calculate_joint_trajectory" title="csc376_franky.motion_generator.RuckigMotionGenerator.calculate_joint_trajectory"><code class="xref py py-meth docutils literal notranslate"><span class="pre">calculate_joint_trajectory()</span></code></a>
+plans a move between two sets of joint positions instead of two poses, in one step:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">q_start</span> <span class="o">=</span> <span class="n">robot</span><span class="o">.</span><span class="n">get_current_joint_positions</span><span class="p">()</span>
+<span class="n">q_target</span> <span class="o">=</span> <span class="n">panda</span><span class="o">.</span><span class="n">qr</span>  <span class="c1"># the joint positions to end at</span>
+<span class="n">q_traj</span><span class="p">,</span> <span class="n">dt</span> <span class="o">=</span> <span class="n">motion_generator</span><span class="o">.</span><span class="n">calculate_joint_trajectory</span><span class="p">(</span><span class="n">q_start</span><span class="p">,</span> <span class="n">q_target</span><span class="p">)</span>
+
+<span class="n">visualizer</span><span class="o">.</span><span class="n">run_joint_trajectory</span><span class="p">(</span><span class="n">q_traj</span><span class="p">,</span> <span class="n">dt</span><span class="p">)</span>
+<span class="n">robot</span><span class="o">.</span><span class="n">run_joint_trajectory</span><span class="p">(</span><span class="n">q_traj</span><span class="p">,</span> <span class="n">dt</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The joints go straight from <code class="docutils literal notranslate"><span class="pre">q_start</span></code> to <code class="docutils literal notranslate"><span class="pre">q_target</span></code> in joint space: they start
+together and arrive together, and at every moment each joint has gone the same
+fraction of its way. Ruckig sets the pace, as fast as the velocity, acceleration
+and jerk limits of every joint allow. The result is a joint trajectory like that of
+<code class="docutils literal notranslate"><span class="pre">cartesian_pose_to_joint_trajectory</span></code>, with the same <code class="docutils literal notranslate"><span class="pre">dt</span></code>.</p>
+<p>Plan in joint space when it is the joint positions that matter: to bring the arm to
+a known configuration before a task, for example. No inverse kinematics is
+involved, so the robot ends at <code class="docutils literal notranslate"><span class="pre">q_target</span></code> itself. A Cartesian move to
+<code class="docutils literal notranslate"><span class="pre">panda.fkine(q_target)</span></code> ends with the end effector at the same pose, but not
+always with the joints at <code class="docutils literal notranslate"><span class="pre">q_target</span></code>: the Panda has seven joints, and more than
+one set of joint positions reaches a pose.</p>
+<p>The three factors of <code class="docutils literal notranslate"><span class="pre">calculate_joint_trajectory</span></code> scale the Panda’s joint limits
+from its datasheet:</p>
+<table class="wrap-literals docutils align-default">
+<colgroup>
+<col style="width: 35.0%"/>
+<col style="width: 15.0%"/>
+<col style="width: 50.0%"/>
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Factor</p></th>
+<th class="head"><p>Default</p></th>
+<th class="head"><p>Limits of joints 1 to 7</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">relative_vel_factor</span></code></p></td>
+<td><p>0.1</p></td>
+<td><p>2.175 rad/s (joints 1 to 4), 2.61 rad/s (joints 5 to 7)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">relative_acc_factor</span></code></p></td>
+<td><p>0.05</p></td>
+<td><p>15, 7.5, 10, 12.5, 15, 20, 20 rad/s²</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">relative_jerk_factor</span></code></p></td>
+<td><p>0.001</p></td>
+<td><p>7500, 3750, 5000, 6250, 7500, 10 000, 10 000 rad/s³</p></td>
+</tr>
+</tbody>
+</table>
+<p>Three things to know when planning in joint space:</p>
+<ul class="simple">
+<li><p>The end effector’s path is not planned. It is whatever the joints make it, a
+curve and not a straight line, so look at the preview before the move runs on
+the robot.</p></li>
+<li><p>The miniPC refuses a trajectory that is faster than its velocity scale, so
+<code class="docutils literal notranslate"><span class="pre">relative_vel_factor</span></code> can be at most 0.3. With the default factors, joint 1
+takes about 8 s for a quarter turn.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">q_target</span></code> has to be inside the robot’s joint limits, in radians:
+<code class="docutils literal notranslate"><span class="pre">calculate_joint_trajectory</span></code> raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> if it is not. The miniPC
+keeps every trajectory 0.01 rad away from the limits, and refuses one that comes
+closer (<code class="docutils literal notranslate"><span class="pre">JointLimitsExceeded</span></code>).</p></li>
 </ul>
 <p>A trajectory does not have to come from the motion generator. The robot runs any
 N x 7 array of joint positions that passes the miniPC’s checks
@@ -1554,6 +1629,8 @@ is clear first.</p>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">speed_factor</span></code> (0.2 by default) can be at most the miniPC’s velocity scale, 0.3.
 <code class="docutils literal notranslate"><span class="pre">stop()</span></code>, Ctrl+C and the miniPC’s other checks work as they do for a trajectory.</p>
+<p>For a move home that you can preview, plan it in joint space instead, to
+<code class="docutils literal notranslate"><span class="pre">protocol.HOME_JOINT_POSITIONS</span></code> (see <a class="reference internal" href="#robot-interface-joint-space"><span class="std std-ref">Planning a move in joint space</span></a>).</p>
 </section>
 <section id="velocity-control">
 <span id="robot-interface-servo"></span><h3>Velocity control<a class="headerlink" href="#velocity-control" title="Link to this heading"></a></h3>
@@ -1777,21 +1854,32 @@ surroundings, then <code class="docutils literal notranslate"><span class="pre">
 <td><p>The robot moved since the plan was made: plan again from
 <code class="docutils literal notranslate"><span class="pre">get_current_joint_positions()</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">JointVelocitiesAboveMaximumAllowed</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">JointLimitsExceeded</span></code></p></td>
+<td><p>A point of the trajectory is closer than 0.01 rad to one of the robot’s
+joint limits, or beyond it; the message names the joint and the range it
+may be in. A move in joint space is closest to the limits at its ends, so
+look at <code class="docutils literal notranslate"><span class="pre">q_target</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">JointVelocitiesAboveMaximumAllowed</span></code></p></td>
 <td><p>A joint would have to move faster than the miniPC allows. Slow the
 trajectory down (a lower <code class="docutils literal notranslate"><span class="pre">relative_vel_factor</span></code>). Near a singularity (the
 arm folded up close to its base, or stretched out) even a slow move of the
 end effector needs fast joints</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">JointAccelerationsAboveMaximumAllowed</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">JointAccelerationsAboveMaximumAllowed</span></code></p></td>
 <td><p>The trajectory changes a joint’s velocity too abruptly at one point (a
 reversal, a sharp corner). Spread the change over more points</p></td>
 </tr>
-<tr class="row-even"><td><p>Either of the two, or <code class="docutils literal notranslate"><span class="pre">JointDistancesAboveMaxJointDifference</span></code>, for a plan
+<tr class="row-odd"><td><p>Either of the two, or <code class="docutils literal notranslate"><span class="pre">JointDistancesAboveMaxJointDifference</span></code>, for a plan
 that turns the end effector, whatever its factors</p></td>
 <td><p>Before version 2.4, <code class="docutils literal notranslate"><span class="pre">csc376_franky</span></code> made the end effector’s orientation
 jump at one point of such a plan. <code class="docutils literal notranslate"><span class="pre">csc376_franky.__version__</span></code> says which
 version a program runs: it needs 2.4 or later</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">'RuckigMotionGenerator'</span> <span class="pre">object</span> <span class="pre">has</span> <span class="pre">no</span> <span class="pre">attribute</span>
+<span class="pre">'calculate_joint_trajectory'</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">csc376_franky</span></code> plans in joint space since version 2.5, and the program
+runs an older one</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TrackingErrorTooLarge</span></code></p></td>
 <td><p>A joint could not follow its command (contact, someone pushed the robot) and
@@ -2341,6 +2429,60 @@ calculate_cartesian_pose_trajectory returns it.</p></li>
 </dd>
 </dl>
 </dd></dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="csc376_franky.motion_generator.RuckigMotionGenerator.calculate_joint_trajectory">
+<span class="sig-name descname"><span class="pre">calculate_joint_trajectory</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">q_start</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">q_target</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">relative_vel_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">relative_acc_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">relative_jerk_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#csc376_franky.motion_generator.RuckigMotionGenerator.calculate_joint_trajectory" title="Link to this definition"></a></dt>
+<dd><p>Plans a move in joint space: a smooth joint trajectory (limited vel, acc and jerk)
+starting from q_start and ending at q_target, at rest at both ends.</p>
+<p>The joints go straight from q_start to q_target in joint space. They
+start together and arrive together, and at every moment each joint has
+gone the same fraction of its way, so no joint leaves the range between
+its start and its target. The move is as fast as the velocity,
+acceleration and jerk limits of every joint allow, scaled by
+relative_vel_factor, relative_acc_factor and relative_jerk_factor.</p>
+<p>No inverse kinematics is involved, so the robot ends at q_target itself.
+The end effector’s path in between is whatever the joints make it, not a
+straight line: preview the trajectory before it runs on the robot.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>q_start</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.5)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></a></span>) – The joint positions the trajectory starts at [rad], 7 numbers.
+Usually the current joint positions of the robot.</p></li>
+<li><p><strong>q_target</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.5)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></a></span>) – The joint positions the trajectory ends at [rad], 7 numbers inside
+the Panda’s joint limits (PANDA_POS_LIM_JOINT).</p></li>
+<li><p><strong>relative_vel_factor</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></a></span>) – 0-1 multiplication factor to multiply PANDA_VEL_LIM_JOINT.
+Limits the velocity of every joint during the entire trajectory.
+The miniPC refuses a trajectory that is faster than its velocity
+scale, 0.3 unless it was set up otherwise.</p></li>
+<li><p><strong>relative_acc_factor</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></a></span>) – 0-1 multiplication factor to multiply PANDA_ACC_LIM_JOINT.
+Limits the acceleration of every joint during the entire trajectory.</p></li>
+<li><p><strong>relative_jerk_factor</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></a></span>) – 0-1 multiplication factor to multiply PANDA_JERK_LIM_JOINT.
+Limits the jerk of every joint during the entire trajectory.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)"><code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code></a>[<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#list" title="(in Python v3.15)"><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code></a>[<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.5)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></a>], <a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></a>]</span></p>
+</dd>
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><strong>q_traj</strong> (<em>list[np.ndarray]</em>) – List of np.ndarray of joint positions with size of joint_dof of robot,
+from q_start (at time 0) to q_target: what the visualizer and the
+robot run. Where q_target is q_start, it is those two points.</p></li>
+<li><p><strong>self.dt</strong> (<em>float</em>) – Delta time between trajectory points of the q_traj.</p></li>
+</ul>
+</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError" title="(in Python v3.15)"><strong>ValueError</strong></a> – If q_start or q_target is not 7 finite numbers, q_target is outside
+    the Panda’s joint limits, or a factor is not larger than 0 and at
+    most 1.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#RuntimeError" title="(in Python v3.15)"><strong>RuntimeError</strong></a> – If the move would take longer than the miniPC runs a trajectory for,
+    10 minutes: the factors are too small for it.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
 </dd></dl>
 </section>
 <section id="visualizer">
@@ -2492,7 +2634,7 @@ have the licence and the details.</p>
   <hr/>
 
   <div role="contentinfo">
-  <p>Copyright &#169; 2020-present, Jesse Haviland and Peter Corke: built 2026-11-20.
+  <p>Copyright &#169; 2020-present, Jesse Haviland and Peter Corke: built 2026-11-23.
   </p>
   <a href="https://github.com/petercorke/robotics-toolbox-python" class="footer-github-link">GitHub</a>
 
