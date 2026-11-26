@@ -32,13 +32,16 @@ path = "csc376_franky/__init__.py"
 [tool.hatch.build.targets.wheel]
 packages = ["csc376_franky"]
 
-# The examples, for whoever has the package but not this repository (the lab's
-# shared environment): <environment>/share/csc376_franky/examples
+# The examples, this folder's README and the documentation page, for whoever has
+# the package but not this repository (the lab's shared environment):
+# <environment>/share/csc376_franky
 [tool.hatch.build.targets.wheel.shared-data]
 "examples" = "share/csc376_franky/examples"
+"README.md" = "share/csc376_franky/README.md"
+"docs.html" = "share/csc376_franky/docs.html"
 
 [tool.hatch.build.targets.sdist]
-include = ["/csc376_franky", "/examples", "/tests", "/README.md"]
+include = ["/csc376_franky", "/examples", "/tests", "/README.md", "/docs.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -158,6 +158,9 @@ cp -r "$CONDA_PREFIX/share/csc376_franky/examples" ~/csc376_franky_examples
 cd ~/csc376_franky_examples && python visualize_then_execute_trajectory.py
 ```
 
+This README and the documentation page (`docs.html`, to open in a browser) are next
+to the examples, in `$CONDA_PREFIX/share/csc376_franky`.
+
 **Dev container**: nothing to install either; it installs `csc376_franky` from this
 folder in editable mode.
 

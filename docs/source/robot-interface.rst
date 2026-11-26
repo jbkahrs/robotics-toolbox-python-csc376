@@ -96,6 +96,9 @@ Toolbox, Ruckig and ``csc376_franky``, and the examples, to copy into your home:
     cp -r "$CONDA_PREFIX/share/csc376_franky/examples" ~/csc376_franky_examples
     cd ~/csc376_franky_examples && python visualize_then_execute_trajectory.py
 
+This page (``docs.html``, to open in a browser) and the README are next to the
+examples, in ``$CONDA_PREFIX/share/csc376_franky``.
+
 **Dev container**: nothing to install either; it installs ``csc376_franky`` from
 ``robot-interface/`` in editable mode.
 
